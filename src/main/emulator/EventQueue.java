@@ -512,15 +512,16 @@ public final class EventQueue implements Runnable {
 				}
 				return;
 			}
-			if (Settings.asyncFlush) {
-				(Settings.xrayView ? xRayScreenImage : backBufferImage)
-						.cloneImage(scr.getScreenImg());
-			}
-			scr.repaint();
-		} catch (Exception e) {
-			System.err.println("Exception in repaint!");
-			e.printStackTrace();
-		}
+                        if (Settings.asyncFlush) {
+                                (Settings.xrayView ? xRayScreenImage : backBufferImage)
+                                                .cloneImage(scr.getScreenImg());
+                        }
+                        DrawCapture.onFlush();
+                        scr.repaint();
+                } catch (Exception e) {
+                        System.err.println("Exception in repaint!");
+                        e.printStackTrace();
+                }
 	}
 
 	void processInputEvent(int[] o) {

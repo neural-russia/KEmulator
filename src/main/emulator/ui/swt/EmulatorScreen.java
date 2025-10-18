@@ -1196,10 +1196,6 @@ public final class EmulatorScreen implements
                 if ((parent = (menuItem = (MenuItem) selectionEvent.widget).getParent()) == this.menu) {
                         if (menuItem == this.captureDrawMenuItem) {
                                 DrawCapture.requestOneFrameCapture();
-                                String path = new File(Emulator.getUserPath(), "capture" + File.separator + "draw").getAbsolutePath();
-                                showMessage(
-                                                UILocale.get("MESSAGE_CAPTURE_DRAW_ARMED", "Draw capture armed"),
-                                                String.format(Locale.ROOT, UILocale.get("MESSAGE_CAPTURE_DRAW_DETAIL", "Capture will start on next frame and be saved to %s"), path));
                         }
                         return;
                 }

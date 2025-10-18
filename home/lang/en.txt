@@ -9,8 +9,6 @@ MENU_TOOL=Tool
 MENU_VIEW=View
 
 MENU_CAPTURE_DRAW=Capture draw calls
-MESSAGE_CAPTURE_DRAW_ARMED=Draw capture armed
-MESSAGE_CAPTURE_DRAW_DETAIL=Capture will start on the next frame. Logs will be saved to %s
 
 MENU_MIDLET_LOAD_JAR=Load jar...
 MENU_MIDLET_LOAD_AUTO_PLAY=Load auto-play record
