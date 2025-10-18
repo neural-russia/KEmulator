@@ -126,7 +126,10 @@ public final class DrawCapture {
 
                 long totalDuration = 0L;
                 Set<Integer> spriteIds = new LinkedHashSet<>();
-                for (FrameSnapshot frame : frames) {
+                List<String> frameKeys = new ArrayList<>(frames.size());
+                for (int i = 0; i < frames.size(); i++) {
+                        FrameSnapshot frame = frames.get(i);
+                        frameKeys.add(formatFrameKey(i));
                         totalDuration += Math.max(0L, frame.end - frame.start);
                         for (DrawCommand command : frame.commands) {
                                 spriteIds.add(command.imageId);
@@ -148,6 +151,16 @@ public final class DrawCapture {
                                 }
                                 writer.write(String.valueOf(spriteId));
                         }
+                        writer.write("],\n");
+                        writer.write("    \"frame_keys\": [");
+                        for (int i = 0; i < frameKeys.size(); i++) {
+                                if (i > 0) {
+                                        writer.write(", ");
+                                }
+                                writer.write('\"');
+                                writer.write(frameKeys.get(i));
+                                writer.write('\"');
+                        }
                         writer.write("]\n");
                         writer.write("  },\n");
                         writer.write("  \"legend\": {\n");
@@ -155,11 +168,15 @@ public final class DrawCapture {
                         writer.write("    \"meta.captured_at\": \"UTC timestamp when the session started.\",\n");
                         writer.write("    \"meta.duration_ms\": \"Sum of all frame durations in milliseconds.\",\n");
                         writer.write("    \"meta.sprite_ids\": \"Stable image debug IDs as shown in Memory View.\",\n");
+                        writer.write("    \"meta.frame_keys\": \"Ordered list of frame identifiers within this capture.\",\n");
                         writer.write("    \"frame.index\": \"Zero-based order of the frame within the capture.\",\n");
+                        writer.write("    \"frame.key\": \"Stable identifier for this frame (e.g., frame_0001).\",\n");
                         writer.write("    \"frame.started_at\": \"UTC timestamp when the frame was queued.\",\n");
                         writer.write("    \"frame.duration_ms\": \"Milliseconds between frame start and finish.\",\n");
                         writer.write("    \"frame.bounds\": \"Absolute bounding rectangle for the frame in screen coordinates.\",\n");
                         writer.write("    \"part.order\": \"Draw order (0 renders first).\",\n");
+                        writer.write("    \"part.frame_key\": \"Frame identifier repeated for convenience when post-processing parts.\",\n");
+                        writer.write("    \"part.instance_id\": \"Stable identifier combining frame key and part order.\",\n");
                         writer.write("    \"part.offset\": \"Offset relative to frame.bounds for positioning sprite parts.\",\n");
                         writer.write("    \"part.absolute_position\": \"Screen-space top-left after anchor resolution.\",\n");
                         writer.write("    \"part.size\": \"Destination width and height after scaling or transforms.\",\n");
@@ -167,23 +184,25 @@ public final class DrawCapture {
                         writer.write("    \"part.transform\": \"Sprite.TRANS_* constant describing orientation.\",\n");
                         writer.write("    \"part.anchor\": \"Graphics anchor flags (TOP/LEFT/HCENTER/etc) used when drawing.\"\n");
                         writer.write("  },\n");
-                        writer.write("  \"frames\": [\n");
+                        writer.write("  \"frames\": {\n");
                         for (int i = 0; i < frames.size(); i++) {
                                 FrameSnapshot snapshot = frames.get(i);
-                                writeFrame(writer, snapshot, i, i + 1 < frames.size());
+                                String frameKey = frameKeys.get(i);
+                                writeFrame(writer, snapshot, frameKey, i, i + 1 < frames.size());
                         }
-                        writer.write("  ]\n");
+                        writer.write("  }\n");
                         writer.write("}\n");
                 }
 
                 return file;
         }
 
-        private static void writeFrame(BufferedWriter writer, FrameSnapshot frame, int index, boolean hasNext) throws IOException {
+        private static void writeFrame(BufferedWriter writer, FrameSnapshot frame, String frameKey, int index, boolean hasNext) throws IOException {
                 FrameBounds bounds = calculateBounds(frame.commands);
                 long duration = Math.max(0L, frame.end - frame.start);
 
-                writer.write("    {\n");
+                writer.write(String.format("    \"%s\": {\n", frameKey));
+                writer.write(String.format("      \"key\": \"%s\",\n", frameKey));
                 writer.write(String.format("      \"index\": %d,\n", index));
                 writer.write(String.format("      \"started_at\": \"%s\",\n", Instant.ofEpochMilli(frame.start)));
                 writer.write(String.format("      \"ended_at\": \"%s\",\n", Instant.ofEpochMilli(frame.end)));
@@ -193,7 +212,7 @@ public final class DrawCapture {
                 writer.write("      \"parts\": [\n");
                 for (int i = 0; i < frame.commands.size(); i++) {
                         DrawCommand command = frame.commands.get(i);
-                        writePart(writer, command, bounds, i, i + 1 < frame.commands.size());
+                        writePart(writer, command, bounds, frameKey, i, i + 1 < frame.commands.size());
                 }
                 writer.write("      ]\n");
                 writer.write("    }");
@@ -203,7 +222,7 @@ public final class DrawCapture {
                 writer.write("\n");
         }
 
-        private static void writePart(BufferedWriter writer, DrawCommand command, FrameBounds bounds, int order, boolean hasNext) throws IOException {
+        private static void writePart(BufferedWriter writer, DrawCommand command, FrameBounds bounds, String frameKey, int order, boolean hasNext) throws IOException {
                 int width = Math.abs(command.dw);
                 int height = Math.abs(command.dh);
                 int absoluteX = resolveAnchorX(command.dx, width, command.anchor);
@@ -213,6 +232,8 @@ public final class DrawCapture {
 
                 writer.write("        {\n");
                 writer.write(String.format("          \"order\": %d,\n", order));
+                writer.write(String.format("          \"frame_key\": \"%s\",\n", frameKey));
+                writer.write(String.format("          \"instance_id\": \"%s\",\n", formatPartInstanceId(frameKey, order)));
                 writer.write(String.format("          \"sprite_id\": %d,\n", command.imageId));
                 writer.write(String.format("          \"offset\": { \"x\": %d, \"y\": %d },\n", offsetX, offsetY));
                 writer.write(String.format("          \"absolute_position\": { \"x\": %d, \"y\": %d },\n", absoluteX, absoluteY));
@@ -338,6 +359,14 @@ public final class DrawCapture {
 
         private static String formatSessionId(int index) {
                 return String.format("capture_%04d", index);
+        }
+
+        private static String formatFrameKey(int index) {
+                return String.format("frame_%04d", index + 1);
+        }
+
+        private static String formatPartInstanceId(String frameKey, int order) {
+                return String.format("%s_part_%03d", frameKey, order + 1);
         }
 
         private static final class DrawCommand {
