@@ -3,6 +3,7 @@ package emulator.ui.swt;
 import emulator.*;
 import emulator.custom.ResourceManager;
 import emulator.custom.CustomMethod;
+import emulator.debug.DrawCapture;
 import emulator.debug.Profiler;
 import emulator.debug.Profiler3D;
 import emulator.graphics2D.IImage;
@@ -108,11 +109,12 @@ public final class EmulatorScreen implements
 	MenuItem speedUpMenuItem;
 	MenuItem slowDownMenuItem;
 	MenuItem resetSpeedMenuItem;
-	MenuItem recordKeysMenuItem;
-	MenuItem enableAutoplayMenuItem;
-	MenuItem captureToFileMenuItem;
-	MenuItem captureToClipboardMenuItem;
-	MenuItem showTrackInfoMenuItem;
+        MenuItem recordKeysMenuItem;
+        MenuItem enableAutoplayMenuItem;
+        MenuItem captureToFileMenuItem;
+        MenuItem captureToClipboardMenuItem;
+        MenuItem captureDrawMenuItem;
+        MenuItem showTrackInfoMenuItem;
 	MenuItem helpMenuItem;
 	MenuItem updateMenuItem;
 	MenuItem optionsMenuItem;
@@ -859,12 +861,15 @@ public final class EmulatorScreen implements
 	}
 
 	private void initMenu() {
-		if (menu != null) {
-			menu.dispose();
-		}
-		this.menu = new Menu(this.shell, SWT.BAR);
-		final MenuItem menuItemMidlet;
-		(menuItemMidlet = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_MIDLET", "Midlet"));
+                if (menu != null) {
+                        menu.dispose();
+                }
+                this.menu = new Menu(this.shell, SWT.BAR);
+                (this.captureDrawMenuItem = new MenuItem(this.menu, SWT.PUSH)).setText(UILocale.get("MENU_CAPTURE_DRAW", "Capture draw calls"));
+                this.captureDrawMenuItem.addSelectionListener(this);
+                new MenuItem(this.menu, SWT.SEPARATOR);
+                final MenuItem menuItemMidlet;
+                (menuItemMidlet = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_MIDLET", "Midlet"));
 		final MenuItem menuItemTool;
 		(menuItemTool = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_TOOL", "Tool"));
 		final MenuItem menuItemView;
@@ -1185,14 +1190,24 @@ public final class EmulatorScreen implements
 		}
 	}
 
-	public void widgetSelected(final SelectionEvent selectionEvent) {
-		final MenuItem menuItem;
-		final Menu parent;
-		if ((parent = (menuItem = (MenuItem) selectionEvent.widget).getParent()) == this.menuTool) {
-			if (menuItem == this.captureToFileMenuItem) {
-				if (this.pauseState != 0) {
-					final String string = Emulator.getUserPath() + "/capture/";
-					final File file;
+        public void widgetSelected(final SelectionEvent selectionEvent) {
+                final MenuItem menuItem;
+                final Menu parent;
+                if ((parent = (menuItem = (MenuItem) selectionEvent.widget).getParent()) == this.menu) {
+                        if (menuItem == this.captureDrawMenuItem) {
+                                DrawCapture.requestOneFrameCapture();
+                                String path = new File(Emulator.getUserPath(), "capture" + File.separator + "draw").getAbsolutePath();
+                                showMessage(
+                                                UILocale.get("MESSAGE_CAPTURE_DRAW_ARMED", "Draw capture armed"),
+                                                String.format(Locale.ROOT, UILocale.get("MESSAGE_CAPTURE_DRAW_DETAIL", "Capture will start on next frame and be saved to %s"), path));
+                        }
+                        return;
+                }
+                if (parent == this.menuTool) {
+                        if (menuItem == this.captureToFileMenuItem) {
+                                if (this.pauseState != 0) {
+                                        final String string = Emulator.getUserPath() + "/capture/";
+                                        final File file;
 					if (!(file = new File(string)).exists() || !file.isDirectory()) {
 						file.mkdir();
 					}

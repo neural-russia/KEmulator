@@ -1,6 +1,7 @@
 package emulator;
 
 import com.vodafone.v10.graphics.sprite.SpriteCanvas;
+import emulator.debug.DrawCapture;
 import emulator.graphics2D.IImage;
 import emulator.ui.IScreen;
 import net.rim.device.api.system.Application;
@@ -227,31 +228,33 @@ public final class EventQueue implements Runnable {
 		queue(EVENT_COMMAND);
 	}
 
-	public void gameGraphicsFlush() {
-		synchronized (repaintLock) {
-			IScreen scr = Emulator.getEmulator().getScreen();
-			if (Settings.asyncFlush) {
-				final IImage screenImage = scr.getScreenImg();
-				final IImage backBufferImage2 = scr.getBackBufferImage();
-				final IImage xRayScreenImage2 = scr.getXRayScreenImage();
-				(Settings.xrayView ? xRayScreenImage2 : backBufferImage2).cloneImage(screenImage);
-			}
-			scr.repaint();
-		}
-	}
+        public void gameGraphicsFlush() {
+                synchronized (repaintLock) {
+                        IScreen scr = Emulator.getEmulator().getScreen();
+                        if (Settings.asyncFlush) {
+                                final IImage screenImage = scr.getScreenImg();
+                                final IImage backBufferImage2 = scr.getBackBufferImage();
+                                final IImage xRayScreenImage2 = scr.getXRayScreenImage();
+                                (Settings.xrayView ? xRayScreenImage2 : backBufferImage2).cloneImage(screenImage);
+                        }
+                        DrawCapture.onFlush();
+                        scr.repaint();
+                }
+        }
 
-	public void gameGraphicsFlush(int x, int y, int w, int h) {
+        public void gameGraphicsFlush(int x, int y, int w, int h) {
 		synchronized (repaintLock) {
 			IScreen scr = Emulator.getEmulator().getScreen();
 			if (Settings.asyncFlush) {
-				final IImage screenImage = scr.getScreenImg();
-				final IImage backBufferImage2 = scr.getBackBufferImage();
-				final IImage xRayScreenImage2 = scr.getXRayScreenImage();
-				(Settings.xrayView ? xRayScreenImage2 : backBufferImage2).cloneImage(screenImage, x, y, w, h);
-			}
-			scr.repaint();
-		}
-	}
+                                final IImage screenImage = scr.getScreenImg();
+                                final IImage backBufferImage2 = scr.getBackBufferImage();
+                                final IImage xRayScreenImage2 = scr.getXRayScreenImage();
+                                (Settings.xrayView ? xRayScreenImage2 : backBufferImage2).cloneImage(screenImage, x, y, w, h);
+                        }
+                        DrawCapture.onFlush();
+                        scr.repaint();
+                }
+        }
 
 	public void serviceRepaints() {
 		if (Settings.ignoreServiceRepaints) return;

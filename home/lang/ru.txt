@@ -8,6 +8,10 @@ MENU_MIDLET=Мидлет
 MENU_TOOL=Функции
 MENU_VIEW=Вид
 
+MENU_CAPTURE_DRAW=Съёмка отрисовки
+MESSAGE_CAPTURE_DRAW_ARMED=Съёмка отрисовки подготовлена
+MESSAGE_CAPTURE_DRAW_DETAIL=Сбор начнётся в следующий кадр. Логи будут сохранены в %s
+
 MENU_MIDLET_LOAD_JAR=Открыть jar...
 MENU_MIDLET_LOAD_AUTO_PLAY=Открыть запись
 MENU_MIDLET_RECENTLY=Последние файлы

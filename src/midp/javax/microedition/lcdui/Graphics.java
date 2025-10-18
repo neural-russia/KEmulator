@@ -6,6 +6,7 @@ import com.jblend.graphics.j3d.FigureLayout;
 import com.jblend.graphics.j3d.Texture;
 import emulator.Emulator;
 import emulator.Settings;
+import emulator.debug.DrawCapture;
 import emulator.debug.Profiler;
 import emulator.graphics2D.GraphicsUtils;
 import emulator.graphics2D.IGraphics2D;
@@ -126,18 +127,19 @@ public class Graphics
 		this.xrayDrawRect(n, n2, n3, n4);
 	}
 
-	public void drawImage(Image image, int n, int n2, int n3) {
-		++Profiler.drawCallCount;
-		if (image == null) {
-			throw new NullPointerException();
-		} else if (!method294(n3, 64)) {
-			throw new IllegalArgumentException();
-		} else {
-			int n5;
-			int height;
-			label32:
-			{
-				if ((n3 & 8) != 0) {
+        public void drawImage(Image image, int n, int n2, int n3) {
+                ++Profiler.drawCallCount;
+                if (image == null) {
+                        throw new NullPointerException();
+                } else if (!method294(n3, 64)) {
+                        throw new IllegalArgumentException();
+                } else {
+                        final int anchor = n3;
+                        int n5;
+                        int height;
+                        label32:
+                        {
+                                if ((n3 & 8) != 0) {
 					n5 = n;
 					height = image.getWidth();
 				} else {
@@ -169,13 +171,14 @@ public class Graphics
 				n2 = n5 - height;
 			}
 
-			impl.drawImage(image.getImpl(), n, n2);
-			updateDebugData(image, 0, 0, n, n2, image.getWidth(), image.getHeight());
-			++image.usedCount;
-			++Profiler.drawImageCallCount;
-			Profiler.drawImagePixelCount += image.getWidth() * image.getHeight();
-		}
-	}
+                        impl.drawImage(image.getImpl(), n, n2);
+                        updateDebugData(image, 0, 0, n, n2, image.getWidth(), image.getHeight());
+                        DrawCapture.record(image, 0, 0, image.getWidth(), image.getHeight(), n, n2, image.getWidth(), image.getHeight(), 0, anchor);
+                        ++image.usedCount;
+                        ++Profiler.drawImageCallCount;
+                        Profiler.drawImagePixelCount += image.getWidth() * image.getHeight();
+                }
+        }
 
 
 	public void drawRegion(final IImage image, final int n, final int n2, final int n3, final int n4, final ITransform transform, final int n5) {
@@ -223,11 +226,11 @@ public class Graphics
 		if (!method294(a, 64)) {
 			throw new IllegalArgumentException();
 		}
-		synchronized (this) {
-			final ITransform transform2 = this.impl.getTransform();
-			final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
-			this.impl.transform(transform);
-			this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, w, h);
+                synchronized (this) {
+                        final ITransform transform2 = this.impl.getTransform();
+                        final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
+                        this.impl.transform(transform);
+                        this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, w, h);
 			this.impl.setTransform(transform2);
 			if (xrayGraphics != null) {
 				this.xrayGraphics.transform(transform);
@@ -236,11 +239,12 @@ public class Graphics
 			} else {
 				updateDebugData(image, sx, sy, 0, 0, w, h);
 			}
-		}
-		++image.usedCount;
-		++Profiler.drawRegionCallCount;
-		Profiler.drawRegionPixelCount += Math.abs(w * h);
-	}
+                }
+                DrawCapture.record(image, sx, sy, w, h, dx, dy, w, h, t, a);
+                ++image.usedCount;
+                ++Profiler.drawRegionCallCount;
+                Profiler.drawRegionPixelCount += Math.abs(w * h);
+        }
 
 	public void _drawRegion(final Image image, final int sx, final int sy, final int w, final int h, final int t, final int dx, final int dy, int dw, int dh, final int a) {
 		++Profiler.drawCallCount;
@@ -256,11 +260,11 @@ public class Graphics
 		if (!method294(a, 64)) {
 			throw new IllegalArgumentException();
 		}
-		synchronized (this) {
-			final ITransform transform2 = this.impl.getTransform();
-			final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
-			this.impl.transform(transform);
-			this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, dw, dh);
+                synchronized (this) {
+                        final ITransform transform2 = this.impl.getTransform();
+                        final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
+                        this.impl.transform(transform);
+                        this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, dw, dh);
 			this.impl.setTransform(transform2);
 			if (xrayGraphics != null) {
 				this.xrayGraphics.transform(transform);
@@ -269,11 +273,12 @@ public class Graphics
 			} else {
 				updateDebugData(image, sx, sy, 0, 0, dw, dh);
 			}
-		}
-		++image.usedCount;
-		++Profiler.drawRegionCallCount;
-		Profiler.drawRegionPixelCount += Math.abs(w * h);
-	}
+                }
+                DrawCapture.record(image, sx, sy, w, h, dx, dy, dw, dh, t, a);
+                ++image.usedCount;
+                ++Profiler.drawRegionCallCount;
+                Profiler.drawRegionPixelCount += Math.abs(w * h);
+        }
 
 	public void drawRGB(final int[] rgbData, final int offset, final int scanlength, final int x, final int y, final int width, final int height, final boolean processAlpha) {
 		++Profiler.drawCallCount;
