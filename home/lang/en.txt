@@ -9,6 +9,11 @@ MENU_TOOL=Tool
 MENU_VIEW=View
 
 MENU_CAPTURE_DRAW=Capture draw calls
+STATUS_CAPTURE_DRAW_ACTIVE=● Capturing draw (%s)
+STATUS_CAPTURE_DRAW_SAVED=Saved draw capture %s to %s (%d frames)
+STATUS_CAPTURE_DRAW_EMPTY=No draw commands captured for %s
+STATUS_CAPTURE_DRAW_ERROR=Failed to save draw capture %s: %s
+STATUS_CAPTURE_DRAW_ERROR_UNKNOWN=unknown error
 
 MENU_MIDLET_LOAD_JAR=Load jar...
 MENU_MIDLET_LOAD_AUTO_PLAY=Load auto-play record
