@@ -10,10 +10,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class DrawCapture {
@@ -27,6 +31,8 @@ public final class DrawCapture {
 
         private static final List<DrawCommand> commands = new ArrayList<>();
         private static final List<FrameSnapshot> sessionFrames = new ArrayList<>();
+        private static final Map<Integer, String> imageHashes = new HashMap<>();
+        private static final String HASH_ALGORITHM = "SHA-256";
 
         private DrawCapture() {
         }
@@ -111,6 +117,7 @@ public final class DrawCapture {
                         }
                         commands.add(new DrawCommand(
                                         image.getDebugId(),
+                                        getImageHash(image),
                                         sx, sy, sw, sh,
                                         dx, dy, dw, dh,
                                         transform, anchor));
@@ -161,13 +168,16 @@ public final class DrawCapture {
                                 writer.write(frameKeys.get(i));
                                 writer.write('\"');
                         }
-                        writer.write("]\n");
+                        writer.write("],\n");
+                        writer.write(String.format("    \"hash_algorithm\": \"%s\"\n", HASH_ALGORITHM));
                         writer.write("  },\n");
                         writer.write("  \"legend\": {\n");
                         writer.write("    \"meta.session\": \"Unique capture identifier for this recording.\",\n");
                         writer.write("    \"meta.captured_at\": \"UTC timestamp when the session started.\",\n");
                         writer.write("    \"meta.duration_ms\": \"Sum of all frame durations in milliseconds.\",\n");
                         writer.write("    \"meta.sprite_ids\": \"Stable image debug IDs as shown in Memory View.\",\n");
+                        writer.write(String.format("    \"meta.hash_algorithm\": \"Hash algorithm applied to sprite pixels (%s).\",\n",
+                                        HASH_ALGORITHM));
                         writer.write("    \"meta.frame_keys\": \"Ordered list of frame identifiers within this capture.\",\n");
                         writer.write("    \"frame.index\": \"Zero-based order of the frame within the capture.\",\n");
                         writer.write("    \"frame.key\": \"Stable identifier for this frame (e.g., frame_0001).\",\n");
@@ -182,7 +192,9 @@ public final class DrawCapture {
                         writer.write("    \"part.size\": \"Destination width and height after scaling or transforms.\",\n");
                         writer.write("    \"part.source\": \"Source rectangle inside the original sprite image.\",\n");
                         writer.write("    \"part.transform\": \"Sprite.TRANS_* constant describing orientation.\",\n");
-                        writer.write("    \"part.anchor\": \"Graphics anchor flags (TOP/LEFT/HCENTER/etc) used when drawing.\"\n");
+                        writer.write("    \"part.anchor\": \"Graphics anchor flags (TOP/LEFT/HCENTER/etc) used when drawing.\",\n");
+                        writer.write(String.format("    \"part.sprite_hash\": \"Hex-encoded %s digest of sprite pixels for deduplication.\"\n",
+                                        HASH_ALGORITHM));
                         writer.write("  },\n");
                         writer.write("  \"frames\": {\n");
                         for (int i = 0; i < frames.size(); i++) {
@@ -235,6 +247,8 @@ public final class DrawCapture {
                 writer.write(String.format("          \"frame_key\": \"%s\",\n", frameKey));
                 writer.write(String.format("          \"instance_id\": \"%s\",\n", formatPartInstanceId(frameKey, order)));
                 writer.write(String.format("          \"sprite_id\": %d,\n", command.imageId));
+                writer.write(String.format("          \"sprite_hash\": { \"algorithm\": \"%s\", \"value\": \"%s\" },\n",
+                                HASH_ALGORITHM, command.imageHash));
                 writer.write(String.format("          \"offset\": { \"x\": %d, \"y\": %d },\n", offsetX, offsetY));
                 writer.write(String.format("          \"absolute_position\": { \"x\": %d, \"y\": %d },\n", absoluteX, absoluteY));
                 writer.write(String.format("          \"size\": { \"width\": %d, \"height\": %d },\n", width, height));
@@ -371,6 +385,7 @@ public final class DrawCapture {
 
         private static final class DrawCommand {
                 final int imageId;
+                final String imageHash;
                 final int sx;
                 final int sy;
                 final int sw;
@@ -382,8 +397,9 @@ public final class DrawCapture {
                 final int transform;
                 final int anchor;
 
-                DrawCommand(int imageId, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh, int transform, int anchor) {
+                DrawCommand(int imageId, String imageHash, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh, int transform, int anchor) {
                         this.imageId = imageId;
+                        this.imageHash = imageHash;
                         this.sx = sx;
                         this.sy = sy;
                         this.sw = sw;
@@ -395,6 +411,52 @@ public final class DrawCapture {
                         this.transform = transform;
                         this.anchor = anchor;
                 }
+        }
+
+        private static String getImageHash(Image image) {
+                int id = image.getDebugId();
+                boolean cacheable = !image.isMutable();
+                if (cacheable) {
+                        String cached = imageHashes.get(id);
+                        if (cached != null) {
+                                return cached;
+                        }
+                }
+
+                int width = image.getWidth();
+                int height = image.getHeight();
+                int[] pixels = new int[width * height];
+                image.getRGB(pixels, 0, width, 0, 0, width, height);
+
+                MessageDigest digest = newDigest();
+                for (int pixel : pixels) {
+                        digest.update((byte) (pixel >> 24));
+                        digest.update((byte) (pixel >> 16));
+                        digest.update((byte) (pixel >> 8));
+                        digest.update((byte) pixel);
+                }
+                String hash = toHex(digest.digest());
+                if (cacheable) {
+                        imageHashes.put(id, hash);
+                }
+                return hash;
+        }
+
+        private static MessageDigest newDigest() {
+                try {
+                        return MessageDigest.getInstance(HASH_ALGORITHM);
+                } catch (NoSuchAlgorithmException e) {
+                        throw new IllegalStateException(HASH_ALGORITHM + " digest not available", e);
+                }
+        }
+
+        private static String toHex(byte[] bytes) {
+                StringBuilder builder = new StringBuilder(bytes.length * 2);
+                for (byte b : bytes) {
+                        builder.append(Character.forDigit((b >>> 4) & 0xF, 16));
+                        builder.append(Character.forDigit(b & 0xF, 16));
+                }
+                return builder.toString();
         }
 
         private static final class FrameSnapshot {
