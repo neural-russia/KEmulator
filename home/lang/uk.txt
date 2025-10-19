@@ -54,6 +54,17 @@ MENU_TOOL_AUTO_PLAY=Увімкнути автовідтворення
 MENU_TOOL_CAPTURE_FILE=Захопити до файлу
 MENU_TOOL_CAPTURE_CLIP=Захопити до буфера обміну
 MENU_TOOL_SHOW_TRACK_INFO=Показати відомості доріжки
+
+# Draw capture legend
+DRAW_CAPTURE_LEGEND_IMAGE_ID=Ідентифікатор зображення (hex)
+DRAW_CAPTURE_LEGEND_SOURCE=Вихідна область [x, y, ширина, висота]
+DRAW_CAPTURE_LEGEND_DESTINATION=Позиція призначення [x, y, ширина, висота]
+DRAW_CAPTURE_LEGEND_TRANSFORM=Значення трансформації MIDP
+DRAW_CAPTURE_LEGEND_ANCHOR=Бітова маска прив'язки
+DRAW_CAPTURE_LEGEND_SEQUENCE_INDEX=Індекс послідовності кадрів
+DRAW_CAPTURE_LEGEND_REF_PIXEL=Опорний піксель спрайта [x, y]
+DRAW_CAPTURE_LEGEND_RAW_FRAME=Індекс вихідного кадру
+DRAW_CAPTURE_LEGEND_COLLISION_BOUNDS=Межі зіткнення [x, y, ширина, висота]
 MENU_TOOL_QWERTY_MODE=QWERTY-режим
 MENU_TOOL_FPS_MODE=FPS-режим
 MENU_TOOL_DISABLE_NETWORK_ACCESS=Вимкнути мережевий доступ

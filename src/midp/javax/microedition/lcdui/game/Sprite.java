@@ -1,5 +1,6 @@
 package javax.microedition.lcdui.game;
 
+import emulator.debug.DrawCapture;
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.lcdui.Image;
 
@@ -138,9 +139,21 @@ public class Sprite extends Layer {
 		if (var1 == null) {
 			throw new NullPointerException();
 		} else {
-			if (super.visible) {
-				var1.drawRegion(this.image, this.anIntArray266[this.frameSequence[this.frame]], this.anIntArray267[this.frameSequence[this.frame]], this.frameWidth, this.frameHeight, this.transform, super.x, super.y, 20);
-			}
+                        if (super.visible) {
+                                final boolean capture = DrawCapture.isEnabled();
+                                final int currentFrame = this.frameSequence[this.frame];
+                                if (capture) {
+                                        DrawCapture.pushSpriteContext(this.refX, this.refY, this.frame, currentFrame, this.collisionX, this.collisionY, this.collisionW, this.collisionH);
+                                }
+
+                                try {
+                                        var1.drawRegion(this.image, this.anIntArray266[currentFrame], this.anIntArray267[currentFrame], this.frameWidth, this.frameHeight, this.transform, super.x, super.y, 20);
+                                } finally {
+                                        if (capture) {
+                                                DrawCapture.popSpriteContext();
+                                        }
+                                }
+                        }
 
 		}
 	}

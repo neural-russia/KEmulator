@@ -71,6 +71,17 @@ MENU_TOOL_CAPTURE_CLIP=Capture to ClipBoard
 
 MENU_TOOL_SHOW_TRACK_INFO=Show Track Info
 
+# Draw capture legend
+DRAW_CAPTURE_LEGEND_IMAGE_ID=Image identity (hex)
+DRAW_CAPTURE_LEGEND_SOURCE=Source region [x, y, width, height]
+DRAW_CAPTURE_LEGEND_DESTINATION=Destination [x, y, width, height]
+DRAW_CAPTURE_LEGEND_TRANSFORM=MIDP transform value
+DRAW_CAPTURE_LEGEND_ANCHOR=Anchor bitmask
+DRAW_CAPTURE_LEGEND_SEQUENCE_INDEX=Frame sequence index
+DRAW_CAPTURE_LEGEND_REF_PIXEL=Sprite reference pixel [x, y]
+DRAW_CAPTURE_LEGEND_RAW_FRAME=Raw frame index
+DRAW_CAPTURE_LEGEND_COLLISION_BOUNDS=Collision bounds [x, y, width, height]
+
 MENU_TOOL_QWERTY_MODE=QWERTY Mode
 MENU_TOOL_FPS_MODE=FPS Mode
 MENU_TOOL_DISABLE_NETWORK_ACCESS=Disable network access

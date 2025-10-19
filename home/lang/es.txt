@@ -70,6 +70,17 @@ MENU_TOOL_CAPTURE_CLIP=Capturar en Portapapeles
 
 MENU_TOOL_SHOW_TRACK_INFO=Mostrar información de seguimiento
 
+# Draw capture legend
+DRAW_CAPTURE_LEGEND_IMAGE_ID=Identidad de imagen (hex)
+DRAW_CAPTURE_LEGEND_SOURCE=Región de origen [x, y, ancho, alto]
+DRAW_CAPTURE_LEGEND_DESTINATION=Destino [x, y, ancho, alto]
+DRAW_CAPTURE_LEGEND_TRANSFORM=Valor de transformación MIDP
+DRAW_CAPTURE_LEGEND_ANCHOR=Máscara de anclaje
+DRAW_CAPTURE_LEGEND_SEQUENCE_INDEX=Índice de secuencia de fotogramas
+DRAW_CAPTURE_LEGEND_REF_PIXEL=Píxel de referencia del sprite [x, y]
+DRAW_CAPTURE_LEGEND_RAW_FRAME=Índice de fotograma original
+DRAW_CAPTURE_LEGEND_COLLISION_BOUNDS=Límites de colisión [x, y, ancho, alto]
+
 MENU_TOOL_QWERTY_MODE=Modo QWERTY
 MENU_TOOL_FPS_MODE=Modo FPS
 MENU_TOOL_DISABLE_NETWORK_ACCESS=Deshabilitar acceso a red

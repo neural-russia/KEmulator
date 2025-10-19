@@ -71,6 +71,17 @@ MENU_TOOL_CAPTURE_CLIP=Скриншот в буфер обмена
 
 MENU_TOOL_SHOW_TRACK_INFO=Вкл. отслеживание вызовов
 
+# Draw capture legend
+DRAW_CAPTURE_LEGEND_IMAGE_ID=Идентификатор изображения (hex)
+DRAW_CAPTURE_LEGEND_SOURCE=Исходная область [x, y, ширина, высота]
+DRAW_CAPTURE_LEGEND_DESTINATION=Позиция назначения [x, y, ширина, высота]
+DRAW_CAPTURE_LEGEND_TRANSFORM=Значение трансформации MIDP
+DRAW_CAPTURE_LEGEND_ANCHOR=Битовая маска привязки
+DRAW_CAPTURE_LEGEND_SEQUENCE_INDEX=Индекс последовательности кадров
+DRAW_CAPTURE_LEGEND_REF_PIXEL=Опорный пиксель спрайта [x, y]
+DRAW_CAPTURE_LEGEND_RAW_FRAME=Индекс исходного кадра
+DRAW_CAPTURE_LEGEND_COLLISION_BOUNDS=Границы столкновения [x, y, ширина, высота]
+
 MENU_TOOL_QWERTY_MODE=Режим QWERTY
 MENU_TOOL_FPS_MODE=Режим FPS
 MENU_TOOL_DISABLE_NETWORK_ACCESS=Отключить доступ к сети

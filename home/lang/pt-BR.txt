@@ -71,6 +71,17 @@ MENU_TOOL_CAPTURE_CLIP=Capturar tela para área de transferência
 
 MENU_TOOL_SHOW_TRACK_INFO=Mostrar Informações da Faixa
 
+# Draw capture legend
+DRAW_CAPTURE_LEGEND_IMAGE_ID=Identidade da imagem (hex)
+DRAW_CAPTURE_LEGEND_SOURCE=Região de origem [x, y, largura, altura]
+DRAW_CAPTURE_LEGEND_DESTINATION=Destino [x, y, largura, altura]
+DRAW_CAPTURE_LEGEND_TRANSFORM=Valor de transformação MIDP
+DRAW_CAPTURE_LEGEND_ANCHOR=Máscara de âncora
+DRAW_CAPTURE_LEGEND_SEQUENCE_INDEX=Índice da sequência de quadros
+DRAW_CAPTURE_LEGEND_REF_PIXEL=Pixel de referência do sprite [x, y]
+DRAW_CAPTURE_LEGEND_RAW_FRAME=Índice de quadro bruto
+DRAW_CAPTURE_LEGEND_COLLISION_BOUNDS=Limites de colisão [x, y, largura, altura]
+
 MENU_TOOL_QWERTY_MODE=Modo QWERTY
 MENU_TOOL_FPS_MODE=Modo FPS
 MENU_TOOL_DISABLE_NETWORK_ACCESS=Desabilitar acesso à rede
