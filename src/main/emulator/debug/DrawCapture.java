@@ -13,7 +13,9 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +35,7 @@ public final class DrawCapture {
         private static final List<FrameSnapshot> sessionFrames = new ArrayList<>();
         private static final Map<Integer, String> imageHashes = new HashMap<>();
         private static final String HASH_ALGORITHM = "SHA-256";
+        private static final ThreadLocal<Deque<SpriteContext>> SPRITE_CONTEXT = ThreadLocal.withInitial(ArrayDeque::new);
 
         private DrawCapture() {
         }
@@ -115,13 +118,51 @@ public final class DrawCapture {
                         if (!sessionActive) {
                                 return;
                         }
+                        SpriteContextSnapshot spriteContext = snapshotContext();
                         commands.add(new DrawCommand(
                                         image.getDebugId(),
                                         getImageHash(image),
                                         sx, sy, sw, sh,
                                         dx, dy, dw, dh,
-                                        transform, anchor));
+                                        transform, anchor,
+                                        spriteContext));
                 }
+        }
+
+        public static void pushSpriteContext(int refX, int refY,
+                                             int resolvedRefX, int resolvedRefY,
+                                             int frameSequenceIndex, int frameSequenceLength,
+                                             int rawFrameIndex, int rawFrameCount,
+                                             int collisionX, int collisionY, int collisionW, int collisionH,
+                                             int transformedCollisionX, int transformedCollisionY,
+                                             int transformedCollisionW, int transformedCollisionH) {
+                Deque<SpriteContext> stack = SPRITE_CONTEXT.get();
+                stack.push(new SpriteContext(
+                                refX, refY,
+                                resolvedRefX, resolvedRefY,
+                                frameSequenceIndex, frameSequenceLength,
+                                rawFrameIndex, rawFrameCount,
+                                collisionX, collisionY, collisionW, collisionH,
+                                transformedCollisionX, transformedCollisionY,
+                                transformedCollisionW, transformedCollisionH));
+        }
+
+        public static void popSpriteContext() {
+                Deque<SpriteContext> stack = SPRITE_CONTEXT.get();
+                if (!stack.isEmpty()) {
+                        stack.pop();
+                }
+                if (stack.isEmpty()) {
+                        SPRITE_CONTEXT.remove();
+                }
+        }
+
+        private static SpriteContextSnapshot snapshotContext() {
+                Deque<SpriteContext> stack = SPRITE_CONTEXT.get();
+                if (stack.isEmpty()) {
+                        return null;
+                }
+                return new SpriteContextSnapshot(stack.peek());
         }
 
         private static Path writeSession(int index, long sessionStart, List<FrameSnapshot> frames) throws IOException {
@@ -193,8 +234,14 @@ public final class DrawCapture {
                         writer.write("    \"part.source\": \"Source rectangle inside the original sprite image.\",\n");
                         writer.write("    \"part.transform\": \"Sprite.TRANS_* constant describing orientation.\",\n");
                         writer.write("    \"part.anchor\": \"Graphics anchor flags (TOP/LEFT/HCENTER/etc) used when drawing.\",\n");
-                        writer.write(String.format("    \"part.sprite_hash\": \"Hex-encoded %s digest of sprite pixels for deduplication.\"\n",
+                        writer.write(String.format("    \"part.sprite_hash\": \"Hex-encoded %s digest of sprite pixels for deduplication.\",\n",
                                         HASH_ALGORITHM));
+                        writer.write("    \"part.sprite_context\": \"Metadata captured from javax.microedition.lcdui.game.Sprite before drawing.\",\n");
+                        writer.write("    \"part.sprite_context.ref_pixel\": \"Sprite.defineReferencePixel values prior to transform.\",\n");
+                        writer.write("    \"part.sprite_context.resolved_ref_pixel\": \"Screen-space coordinates of the reference pixel.\",\n");
+                        writer.write("    \"part.sprite_context.sequence\": \"Active frame sequence metadata (index, length, raw frame, raw count).\",\n");
+                        writer.write("    \"part.sprite_context.collision\": \"User-defined collision rectangle before applying transforms.\",\n");
+                        writer.write("    \"part.sprite_context.transformed_collision\": \"Collision rectangle after applying the current transform.\"\n");
                         writer.write("  },\n");
                         writer.write("  \"frames\": {\n");
                         for (int i = 0; i < frames.size(); i++) {
@@ -256,13 +303,35 @@ public final class DrawCapture {
                                 command.sx, command.sy, command.sw, command.sh));
                 writer.write(String.format("          \"transform\": { \"value\": %d, \"name\": \"%s\" },\n",
                                 command.transform, transformName(command.transform)));
-                writer.write(String.format("          \"anchor\": { \"value\": %d, \"components\": %s }\n",
+                writer.write(String.format("          \"anchor\": { \"value\": %d, \"components\": %s },\n",
                                 command.anchor, anchorComponentsJson(command.anchor)));
+                writeSpriteContext(writer, command.spriteContext);
                 writer.write("        }");
                 if (hasNext) {
                         writer.write(",");
                 }
                 writer.write("\n");
+        }
+
+        private static void writeSpriteContext(BufferedWriter writer, SpriteContextSnapshot context) throws IOException {
+                if (context == null) {
+                        writer.write("          \"sprite_context\": null\n");
+                        return;
+                }
+                writer.write("          \"sprite_context\": {\n");
+                writer.write(String.format("            \"ref_pixel\": { \"x\": %d, \"y\": %d },\n",
+                                context.refX, context.refY));
+                writer.write(String.format("            \"resolved_ref_pixel\": { \"x\": %d, \"y\": %d },\n",
+                                context.resolvedRefX, context.resolvedRefY));
+                writer.write(String.format("            \"sequence\": { \"index\": %d, \"length\": %d, \"raw_frame\": %d, \"raw_count\": %d },\n",
+                                context.frameSequenceIndex, context.frameSequenceLength,
+                                context.rawFrameIndex, context.rawFrameCount));
+                writer.write(String.format("            \"collision\": { \"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d },\n",
+                                context.collisionX, context.collisionY, context.collisionW, context.collisionH));
+                writer.write(String.format("            \"transformed_collision\": { \"x\": %d, \"y\": %d, \"width\": %d, \"height\": %d }\n",
+                                context.transformedCollisionX, context.transformedCollisionY,
+                                context.transformedCollisionW, context.transformedCollisionH));
+                writer.write("          }\n");
         }
 
         private static FrameBounds calculateBounds(List<DrawCommand> commands) {
@@ -396,8 +465,10 @@ public final class DrawCapture {
                 final int dh;
                 final int transform;
                 final int anchor;
+                final SpriteContextSnapshot spriteContext;
 
-                DrawCommand(int imageId, String imageHash, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh, int transform, int anchor) {
+                DrawCommand(int imageId, String imageHash, int sx, int sy, int sw, int sh, int dx, int dy, int dw, int dh, int transform, int anchor,
+                            SpriteContextSnapshot spriteContext) {
                         this.imageId = imageId;
                         this.imageHash = imageHash;
                         this.sx = sx;
@@ -410,6 +481,88 @@ public final class DrawCapture {
                         this.dh = dh;
                         this.transform = transform;
                         this.anchor = anchor;
+                        this.spriteContext = spriteContext;
+                }
+        }
+
+        private static final class SpriteContext {
+                final int refX;
+                final int refY;
+                final int resolvedRefX;
+                final int resolvedRefY;
+                final int frameSequenceIndex;
+                final int frameSequenceLength;
+                final int rawFrameIndex;
+                final int rawFrameCount;
+                final int collisionX;
+                final int collisionY;
+                final int collisionW;
+                final int collisionH;
+                final int transformedCollisionX;
+                final int transformedCollisionY;
+                final int transformedCollisionW;
+                final int transformedCollisionH;
+
+                SpriteContext(int refX, int refY, int resolvedRefX, int resolvedRefY,
+                              int frameSequenceIndex, int frameSequenceLength,
+                              int rawFrameIndex, int rawFrameCount,
+                              int collisionX, int collisionY, int collisionW, int collisionH,
+                              int transformedCollisionX, int transformedCollisionY,
+                              int transformedCollisionW, int transformedCollisionH) {
+                        this.refX = refX;
+                        this.refY = refY;
+                        this.resolvedRefX = resolvedRefX;
+                        this.resolvedRefY = resolvedRefY;
+                        this.frameSequenceIndex = frameSequenceIndex;
+                        this.frameSequenceLength = frameSequenceLength;
+                        this.rawFrameIndex = rawFrameIndex;
+                        this.rawFrameCount = rawFrameCount;
+                        this.collisionX = collisionX;
+                        this.collisionY = collisionY;
+                        this.collisionW = collisionW;
+                        this.collisionH = collisionH;
+                        this.transformedCollisionX = transformedCollisionX;
+                        this.transformedCollisionY = transformedCollisionY;
+                        this.transformedCollisionW = transformedCollisionW;
+                        this.transformedCollisionH = transformedCollisionH;
+                }
+        }
+
+        private static final class SpriteContextSnapshot {
+                final int refX;
+                final int refY;
+                final int resolvedRefX;
+                final int resolvedRefY;
+                final int frameSequenceIndex;
+                final int frameSequenceLength;
+                final int rawFrameIndex;
+                final int rawFrameCount;
+                final int collisionX;
+                final int collisionY;
+                final int collisionW;
+                final int collisionH;
+                final int transformedCollisionX;
+                final int transformedCollisionY;
+                final int transformedCollisionW;
+                final int transformedCollisionH;
+
+                SpriteContextSnapshot(SpriteContext context) {
+                        this.refX = context.refX;
+                        this.refY = context.refY;
+                        this.resolvedRefX = context.resolvedRefX;
+                        this.resolvedRefY = context.resolvedRefY;
+                        this.frameSequenceIndex = context.frameSequenceIndex;
+                        this.frameSequenceLength = context.frameSequenceLength;
+                        this.rawFrameIndex = context.rawFrameIndex;
+                        this.rawFrameCount = context.rawFrameCount;
+                        this.collisionX = context.collisionX;
+                        this.collisionY = context.collisionY;
+                        this.collisionW = context.collisionW;
+                        this.collisionH = context.collisionH;
+                        this.transformedCollisionX = context.transformedCollisionX;
+                        this.transformedCollisionY = context.transformedCollisionY;
+                        this.transformedCollisionW = context.transformedCollisionW;
+                        this.transformedCollisionH = context.transformedCollisionH;
                 }
         }
 
