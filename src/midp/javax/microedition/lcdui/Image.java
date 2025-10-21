@@ -11,14 +11,17 @@ import emulator.graphics2D.IImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class Image {
-	private boolean mutable;
-	private IImage imageImpl;
-	private IImage xrayBuffer;
-	private IImage usedRegion;
-	int usedCount;
-	private boolean disposed;
+        private boolean mutable;
+        private IImage imageImpl;
+        private IImage xrayBuffer;
+        private IImage usedRegion;
+        int usedCount;
+        private boolean disposed;
+        private static final AtomicInteger NEXT_DEBUG_ID = new AtomicInteger(1);
+        private final int debugId = NEXT_DEBUG_ID.getAndIncrement();
 
 	public Image(final IImage img) {
 		super();
@@ -73,13 +76,17 @@ public class Image {
 		return this.imageImpl.getWidth();
 	}
 
-	public int getHeight() {
-		return this.imageImpl.getHeight();
-	}
+        public int getHeight() {
+                return this.imageImpl.getHeight();
+        }
 
-	public boolean isMutable() {
-		return this.mutable;
-	}
+        public boolean isMutable() {
+                return this.mutable;
+        }
+
+        public int getDebugId() {
+                return debugId;
+        }
 
 	private static Image decode(final byte[] array) throws IllegalArgumentException {
 		try {

@@ -3,6 +3,7 @@ package emulator.ui.swt;
 import emulator.*;
 import emulator.custom.ResourceManager;
 import emulator.custom.CustomMethod;
+import emulator.debug.DrawCapture;
 import emulator.debug.Profiler;
 import emulator.debug.Profiler3D;
 import emulator.graphics2D.IImage;
@@ -38,6 +39,8 @@ import java.util.Calendar;
 import java.util.Locale;
 import java.util.Random;
 import java.util.Vector;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 public final class EmulatorScreen implements
 		IScreen, Runnable, PaintListener, DisposeListener,
@@ -54,6 +57,7 @@ public final class EmulatorScreen implements
 	private CLabel leftSoftLabel;
 	private CLabel rightSoftLabel;
 	private CLabel statusLabel;
+	private String captureStatusMessage = "";
 	private Menu menu;
 	private Menu menuMidlet;
 	private Menu menuTool;
@@ -108,11 +112,12 @@ public final class EmulatorScreen implements
 	MenuItem speedUpMenuItem;
 	MenuItem slowDownMenuItem;
 	MenuItem resetSpeedMenuItem;
-	MenuItem recordKeysMenuItem;
-	MenuItem enableAutoplayMenuItem;
-	MenuItem captureToFileMenuItem;
-	MenuItem captureToClipboardMenuItem;
-	MenuItem showTrackInfoMenuItem;
+        MenuItem recordKeysMenuItem;
+        MenuItem enableAutoplayMenuItem;
+        MenuItem captureToFileMenuItem;
+        MenuItem captureToClipboardMenuItem;
+        MenuItem captureDrawMenuItem;
+        MenuItem showTrackInfoMenuItem;
 	MenuItem helpMenuItem;
 	MenuItem updateMenuItem;
 	MenuItem optionsMenuItem;
@@ -782,11 +787,58 @@ public final class EmulatorScreen implements
 			var9.append("x");
 		}
 		var9.append(Settings.speedModifier);
+		if (this.captureStatusMessage != null && !this.captureStatusMessage.isEmpty()) {
+			if (var9.length() > 0) {
+				var9.append(var8);
+			}
+			var9.append(this.captureStatusMessage);
+		}
 		this.statusLabel.setText(var9.toString());
 	}
 
 
-	private void initShell() {
+        private void setCaptureStatusMessage(String message) {
+                String normalized = message == null ? "" : message;
+                if (normalized.equals(this.captureStatusMessage)) {
+                        return;
+                }
+                this.captureStatusMessage = normalized;
+                if (this.statusLabel != null && !this.statusLabel.isDisposed()) {
+                        updateStatus();
+                }
+        }
+
+        private void applyCaptureStatus(DrawCapture.CaptureStatus status) {
+                if (status == null) {
+                        return;
+                }
+                if (status.active) {
+                        setCaptureStatusMessage(String.format(UILocale.get("STATUS_CAPTURE_DRAW_ACTIVE", "● Capturing draw (%s)"), status.sessionId));
+                        return;
+                }
+                if (status.error != null) {
+                        String errorText = status.error.replace('\n', ' ').replace('\r', ' ').trim();
+                        if (errorText.isEmpty()) {
+                                errorText = UILocale.get("STATUS_CAPTURE_DRAW_ERROR_UNKNOWN", "unknown error");
+                        }
+                        setCaptureStatusMessage(String.format(UILocale.get("STATUS_CAPTURE_DRAW_ERROR", "Failed to save draw capture %s: %s"), status.sessionId, errorText));
+                        return;
+                }
+                if (status.frames > 0 && status.file != null) {
+                        Path file = status.file.toAbsolutePath().normalize();
+                        Path userPath = Paths.get(Emulator.getUserPath()).toAbsolutePath().normalize();
+                        String displayPath = file.toString();
+                        if (file.startsWith(userPath)) {
+                                displayPath = userPath.relativize(file).toString();
+                        }
+                        displayPath = displayPath.replace('\\', '/');
+                        setCaptureStatusMessage(String.format(UILocale.get("STATUS_CAPTURE_DRAW_SAVED", "Saved draw capture %s to %s (%d frames)"), status.sessionId, displayPath, status.frames));
+                        return;
+                }
+                setCaptureStatusMessage(String.format(UILocale.get("STATUS_CAPTURE_DRAW_EMPTY", "No draw commands captured for %s"), status.sessionId));
+        }
+
+        private void initShell() {
 		final GridLayout layout;
 		(layout = new GridLayout()).numColumns = 3;
 		layout.horizontalSpacing = 5;
@@ -859,12 +911,16 @@ public final class EmulatorScreen implements
 	}
 
 	private void initMenu() {
-		if (menu != null) {
-			menu.dispose();
-		}
-		this.menu = new Menu(this.shell, SWT.BAR);
-		final MenuItem menuItemMidlet;
-		(menuItemMidlet = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_MIDLET", "Midlet"));
+                if (menu != null) {
+                        menu.dispose();
+                }
+                this.menu = new Menu(this.shell, SWT.BAR);
+                (this.captureDrawMenuItem = new MenuItem(this.menu, SWT.CHECK)).setText(UILocale.get("MENU_CAPTURE_DRAW", "Capture draw calls"));
+                this.captureDrawMenuItem.setSelection(DrawCapture.isRecording());
+                this.captureDrawMenuItem.addSelectionListener(this);
+                new MenuItem(this.menu, SWT.SEPARATOR);
+                final MenuItem menuItemMidlet;
+                (menuItemMidlet = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_MIDLET", "Midlet"));
 		final MenuItem menuItemTool;
 		(menuItemTool = new MenuItem(this.menu, 64)).setText(UILocale.get("MENU_TOOL", "Tool"));
 		final MenuItem menuItemView;
@@ -1185,14 +1241,22 @@ public final class EmulatorScreen implements
 		}
 	}
 
-	public void widgetSelected(final SelectionEvent selectionEvent) {
-		final MenuItem menuItem;
-		final Menu parent;
-		if ((parent = (menuItem = (MenuItem) selectionEvent.widget).getParent()) == this.menuTool) {
-			if (menuItem == this.captureToFileMenuItem) {
-				if (this.pauseState != 0) {
-					final String string = Emulator.getUserPath() + "/capture/";
-					final File file;
+        public void widgetSelected(final SelectionEvent selectionEvent) {
+                final MenuItem menuItem;
+                final Menu parent;
+                if ((parent = (menuItem = (MenuItem) selectionEvent.widget).getParent()) == this.menu) {
+                        if (menuItem == this.captureDrawMenuItem) {
+                                DrawCapture.CaptureStatus captureStatus = DrawCapture.toggleCapture();
+                                this.captureDrawMenuItem.setSelection(captureStatus.active);
+                                applyCaptureStatus(captureStatus);
+                        }
+                        return;
+                }
+                if (parent == this.menuTool) {
+                        if (menuItem == this.captureToFileMenuItem) {
+                                if (this.pauseState != 0) {
+                                        final String string = Emulator.getUserPath() + "/capture/";
+                                        final File file;
 					if (!(file = new File(string)).exists() || !file.isDirectory()) {
 						file.mkdir();
 					}

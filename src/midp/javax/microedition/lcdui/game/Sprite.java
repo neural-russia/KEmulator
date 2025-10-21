@@ -138,12 +138,12 @@ public class Sprite extends Layer {
 		if (var1 == null) {
 			throw new NullPointerException();
 		} else {
-			if (super.visible) {
-				var1.drawRegion(this.image, this.anIntArray266[this.frameSequence[this.frame]], this.anIntArray267[this.frameSequence[this.frame]], this.frameWidth, this.frameHeight, this.transform, super.x, super.y, 20);
-			}
+                        if (super.visible) {
+                                var1.drawRegion(this.image, this.anIntArray266[this.frameSequence[this.frame]], this.anIntArray267[this.frameSequence[this.frame]], this.frameWidth, this.frameHeight, this.transform, super.x, super.y, 20);
+                        }
 
-		}
-	}
+                }
+        }
 
 	public void setFrameSequence(int[] var1) {
 		int var2;

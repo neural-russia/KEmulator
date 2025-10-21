@@ -8,6 +8,13 @@ MENU_MIDLET=Мидлет
 MENU_TOOL=Функции
 MENU_VIEW=Вид
 
+MENU_CAPTURE_DRAW=Съёмка отрисовки
+STATUS_CAPTURE_DRAW_ACTIVE=● Запись отрисовки (%s)
+STATUS_CAPTURE_DRAW_SAVED=Запись отрисовки %s сохранена в %s (%d кадров)
+STATUS_CAPTURE_DRAW_EMPTY=Отрисовка для %s не записана
+STATUS_CAPTURE_DRAW_ERROR=Не удалось сохранить запись отрисовки %s: %s
+STATUS_CAPTURE_DRAW_ERROR_UNKNOWN=неизвестная ошибка
+
 MENU_MIDLET_LOAD_JAR=Открыть jar...
 MENU_MIDLET_LOAD_AUTO_PLAY=Открыть запись
 MENU_MIDLET_RECENTLY=Последние файлы

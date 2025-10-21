@@ -57,9 +57,9 @@ public class ImageViewItem {
 		return false;
 	}
 
-	public String getCaption() {
-		return type.toString();
-	}
+        public String getCaption() {
+                return type + " #" + drawable.getDebugId();
+        }
 
 	private final static String[] m3gTypes = new String[]{"A", "L", "LA", "RGB", "RGBA"};
 }
