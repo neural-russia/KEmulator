@@ -148,7 +148,7 @@ public class AppSettings {
 		m3gForcePerspectiveCorrection = false;
 		m3gDisableLightClamp = false;
 		m3gFlushImmediately = false;
-		m3gThread = false;
+		m3gThread = true;
 
 		m3gAA = APP_CONTROLLED;
 		m3gTexFilter = APP_CONTROLLED;
