@@ -113,6 +113,7 @@ public final class Emulator3D implements IGraphics3D {
 	private static boolean threadBound;
 	private ExecutorService executorService;
 	private Thread executorThread;
+	private boolean useM3gThread;
 
 	private Emulator3D() {
 		instance = this;
@@ -149,6 +150,7 @@ public final class Emulator3D implements IGraphics3D {
 
 	public void start() {
 		if (executorService != null) return;
+		useM3gThread = AppSettings.m3gThread;
 		executorService = Executors.newSingleThreadExecutor((r) -> {
 			Thread t = new Thread(r, "KEmulator-M3G");
 			t.setPriority(5);
@@ -191,7 +193,7 @@ public final class Emulator3D implements IGraphics3D {
 
 		start();
 
-		if (!threadBound || !AppSettings.m3gThread) {
+		if (!threadBound || !useM3gThread) {
 			threadBound = true;
 			sync(() -> {
 				try {
@@ -295,7 +297,7 @@ public final class Emulator3D implements IGraphics3D {
 			});
 		}
 
-		if (!AppSettings.m3gThread) {
+		if (!useM3gThread) {
 			releaseContext();
 		}
 
@@ -1398,7 +1400,7 @@ public final class Emulator3D implements IGraphics3D {
 
 	private void dispose() {
 		exiting = true;
-		if (initialized && AppSettings.m3gThread) {
+		if (initialized && useM3gThread) {
 			sync(() -> {
 				releaseTextures();
 				releaseContext();
@@ -1520,14 +1522,29 @@ public final class Emulator3D implements IGraphics3D {
 			} else {
 				GLCanvasUtil.makeCurrent(glCanvas);
 			}
-			getCapabilities();
+			try {
+				getCapabilities();
+			} catch (Exception e) {
+				Emulator.getEmulator().getLogStream().println("Failed to rebind OpenGL context, reinitializing it!");
+				e.printStackTrace();
+				initialized = false;
+
+				releaseContext();
+				unusedGLTextures.clear();
+				usedGLTextures.clear();
+				for (Image2D img : texturesTable.values()) {
+					img._setId(0);
+				}
+
+				bindM3GThread(w, h, true);
+			}
 		}
 	}
 
 	// m3g thread
 
 	public void sync(Runnable r) throws M3GException {
-		if (Thread.currentThread() == executorThread || !AppSettings.m3gThread) {
+		if (Thread.currentThread() == executorThread || !useM3gThread) {
 			try {
 				r.run();
 			} catch (RuntimeException e) {
@@ -1552,7 +1569,7 @@ public final class Emulator3D implements IGraphics3D {
 	}
 
 	public void async(Runnable r) {
-		if (Thread.currentThread() == executorThread || !AppSettings.m3gThread) {
+		if (Thread.currentThread() == executorThread || !useM3gThread) {
 			r.run();
 			return;
 		}
