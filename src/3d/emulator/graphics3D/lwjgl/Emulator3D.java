@@ -292,7 +292,6 @@ public final class Emulator3D implements IGraphics3D {
 				if (exiting) {
 					while (!usedGLTextures.isEmpty())
 						releaseTexture(usedGLTextures.get(0));
-					return;
 				}
 			});
 		}
