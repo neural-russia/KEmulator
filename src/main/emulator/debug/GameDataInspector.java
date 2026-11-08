@@ -29,6 +29,8 @@ public final class GameDataInspector {
             "1".equals(System.getenv("KEM_INSPECT_MUTABLE"));
     private static final boolean DRAW_CALLSITES =
             "1".equals(System.getenv("KEM_INSPECT_CALLSITES"));
+    private static final boolean TRACE_METHODS =
+            "1".equals(System.getenv("KEM_INSPECT_METHODS"));
     private static final int MAX_ARRAY_ITEMS = Math.max(128, Math.min(1000000,
             intEnv("KEM_INSPECT_MAX_ARRAY", 65536)));
     private static final int STATE_EVERY = Math.max(1, intEnv("KEM_INSPECT_STATE_EVERY", 30));
@@ -53,6 +55,16 @@ public final class GameDataInspector {
 
     public static boolean isEnabled() {
         return enabled;
+    }
+    /** Method instrumentation must be selected before classes are first loaded. */
+    public static boolean isTracingMethods() {
+        return TRACE_METHODS;
+    }
+
+    public static synchronized void methodEntered(String method) {
+        if (!enabled || !TRACE_METHODS) return;
+        record("methods.jsonl", "{\"frame\":" + frame + ",\"method\":" + json(method) +
+                ",\"thread\":" + Thread.currentThread().getId() + "}");
     }
 
     public static synchronized void setEnabled(boolean value) {
