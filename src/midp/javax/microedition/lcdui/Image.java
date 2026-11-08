@@ -5,6 +5,7 @@ import emulator.Emulator;
 import emulator.Settings;
 import emulator.custom.ResourceManager;
 import emulator.debug.Profiler;
+import emulator.debug.GameDataInspector;
 import emulator.graphics2D.GraphicsUtils;
 import emulator.graphics2D.IImage;
 
@@ -27,6 +28,7 @@ public class Image {
 		this.resetUsedRegion();
 		Profiler.totalImagePixelCount += this.getWidth() * this.getHeight();
 		++Profiler.totalImageInstances;
+		GameDataInspector.imageCreated(this);
 	}
 
 	public void finalize() {
