@@ -108,6 +108,7 @@ public final class GameDataInspector {
             return true;
         } catch (Throwable t) {
             enabled = false;
+            root = null;
             if (!warned) {
                 warned = true;
                 System.err.println("[GameInspector] Cannot initialize output: " + t);
@@ -247,7 +248,7 @@ public final class GameDataInspector {
             nativeImageIds.put(image.getImpl(), next);
             record("images.jsonl", "{\"event\":\"create\",\"id\":" + next +
                     ",\"width\":" + image.getWidth() + ",\"height\":" + image.getHeight() +
-                    ",\"mutable\":" + image.isMutable() + ",\"frame\":" + frame + "}");
+                    ",\"mutableAtAllocation\":" + image.isMutable() + ",\"frame\":" + frame + "}");
         } catch (Throwable e) {
             record("images.jsonl", "{\"event\":\"create\",\"id\":" + next +
                     ",\"error\":" + json(e.toString()) + "}");
@@ -427,7 +428,8 @@ public final class GameDataInspector {
      * Call explicitly from its "Dump game heap" button, not on the rendering thread.
      */
     public static synchronized void dumpHeap() {
-        if (!enabled) setEnabled(true);
+        boolean wasEnabled = enabled;
+        if (!wasEnabled) setEnabled(true);
         if (!start()) return;
         try {
             Memory memory = Memory.getInstance();
@@ -506,6 +508,8 @@ public final class GameDataInspector {
         } catch (Throwable e) {
             System.err.println("[GameInspector] Heap export failed: " + e);
             e.printStackTrace();
+        } finally {
+            if (!wasEnabled) setEnabled(false);
         }
     }
 }
