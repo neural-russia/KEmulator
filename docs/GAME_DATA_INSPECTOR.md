@@ -74,6 +74,7 @@ Environment variables are read before the emulator/game starts:
 - KEM_INSPECT_STATE_CLASSES=g,f: static scalar classes to sample.
 - KEM_INSPECT_STATE_EVERY=30: sampling interval in presented frames.
 - KEM_INSPECT_MAX_ARRAY=65536: maximum per-array elements in heap export.
+- KEM_INSPECT_MAX_RGB_PIXELS=500000: maximum drawRGB bitmap pixels.
 
 Begin with only KEM_INSPECTOR=1; enable expensive probes for targeted debugging.
 
@@ -102,8 +103,9 @@ Replace native@123456 with one of the printed targets.
 The previewer writes numbered PNG frames, approximating MIDP crop/transform,
 anchor, translation, clipping and image compositing.
 
-Caveats: It does NOT replay fillRect/lines, raw drawRGB pixels or offscreen
-dependencies, and some platform-specific transformations may differ. It is a
+Caveats: It does NOT replay fillRect/lines or offscreen dependencies,
+and some platform-specific transformations may differ. drawRGB source pixels
+are recorded and replayed where the bitmap is within the configured size cap. It is a
 diagnostic preview, not an exact game renderer. It also does not enumerate
 animations never requested by the running game.
 
