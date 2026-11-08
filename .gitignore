@@ -44,3 +44,9 @@ micro3d_*.jar
 KEmulator_x64.jar
 kemulator-debug.jar
 version.mf
+
+# Game Data Inspector raw captures and generated previews
+game-inspector-output/
+replayed-frames/
+build/inspector-ci/
+build/inspector-sources.txt
