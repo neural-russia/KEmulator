@@ -434,6 +434,15 @@ public final class GameDataInspector {
         try {
             Memory memory = Memory.getInstance();
             memory.updateEverything();
+            // MemoryView already discovers images that are loaded but not yet drawn.
+            // Save them too: a game's animation atlas can contain unvisited frames.
+            for (Image img : new ArrayList<Image>(memory.images)) {
+                if (img == null) continue;
+                try {
+                    int id = imageId(img);
+                    capture(img, id);
+                } catch (Throwable ignored) {}
+            }
             File dest = new File(root, "heap/heap_" + System.currentTimeMillis() + ".jsonl");
             BufferedWriter out = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(dest), "UTF-8"));
             int count = 0, arrays = 0;
