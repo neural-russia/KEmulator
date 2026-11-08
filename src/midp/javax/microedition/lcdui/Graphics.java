@@ -302,7 +302,10 @@ public class Graphics
 		++Profiler.drawRGBCallCount;
 		Profiler.drawRGBPixelCount += Math.abs(width * height);
 		if (GameDataInspector.isEnabled())
-			GameDataInspector.drawRGB(this.image, x, y, width, height);
+			GameDataInspector.drawRGB(rgbData, offset, scanlength,
+					this.image, x, y, width, height, processAlpha,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
 	}
 
 	public void drawChar(final char c, final int n, final int n2, final int n3) {
