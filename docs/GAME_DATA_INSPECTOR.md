@@ -11,7 +11,7 @@ the inspector cannot see data that has never been loaded or decoded.
 ## Build and run (Windows)
 
 1. Clone/download branch
-   [feature/game-data-inspector](https://github.com/neural-russia/KEmulator/tree/feature/game-data-inspector).
+   [feature/game-data-inspector-upstream-2.22](https://github.com/neural-russia/KEmulator/tree/feature/game-data-inspector-upstream-2.22).
    Do not extract the sources into an existing KEmulator installation.
 2. Open the repository root in IntelliJ IDEA (project has committed .idea
    modules and artifacts). Configure JDK 8 or 17 and install/enable Ant plugin.
