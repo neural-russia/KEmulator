@@ -13,7 +13,7 @@ import collections
 import json
 from pathlib import Path
 
-from PIL import Image, ImageChops
+from PIL import Image
 
 
 def events(path: Path):
@@ -63,6 +63,9 @@ def draw(canvas: Image.Image, command: dict, images: Path, cache: dict) -> bool:
     if op == "drawImage":
         item = source
         x, y = int(command["x"]), int(command["y"])
+    elif op == "drawRGB":
+        item = source
+        x, y = map(int, command["dst"][:2])
     elif op == "drawRegion":
         sx, sy, w, h = command["src"]
         item = source.crop((sx, sy, sx + w, sy + h))
@@ -124,7 +127,7 @@ def main():
     if not trace.exists():
         parser.error("draws.jsonl not found. Enable Game trace and run the game first.")
     counts = collections.Counter(
-        e.get("target") for e in events(trace) if e.get("op") in ("drawImage", "drawRegion")
+        e.get("target") for e in events(trace) if e.get("op") in ("drawImage", "drawRegion", "drawRGB")
     )
     print("Drawing targets (number of commands):")
     for key, number in counts.most_common(25):
@@ -132,7 +135,7 @@ def main():
     if args.list_targets:
         return
     if not counts:
-        parser.error("No drawImage/drawRegion events were captured.")
+        parser.error("No captured drawing events found.")
     target = args.target or counts.most_common(1)[0][0]
     width, height = map(int, args.size.lower().split("x"))
     args.out.mkdir(parents=True, exist_ok=True)
@@ -150,7 +153,7 @@ def main():
             saved += 1
 
     for e in events(trace):
-        if e.get("target") != target or e.get("op") not in ("drawImage", "drawRegion"):
+        if e.get("target") != target or e.get("op") not in ("drawImage", "drawRegion", "drawRGB"):
             continue
         n = e.get("frame", 0)
         if frame != n:
@@ -167,7 +170,7 @@ def main():
         save_frame()
     print(f"Rendered {saved} frames for {target}; draws={drawn}, missing/unsupported={skipped}")
     print(f"Output directory: {args.out.resolve()}")
-    print("Note: fillRect, direct graphics primitives, drawRGB pixels and offscreen dependencies")
+    print("Note: fillRect, direct graphics primitives and offscreen dependencies")
     print("are not replayed by this minimal previewer; output may differ from the game.")
 
 
