@@ -4,6 +4,7 @@ import com.nokia.mid.ui.CanvasGraphicsItem;
 import com.nokia.mid.ui.CanvasItem;
 import com.nokia.mid.ui.TextEditor;
 import emulator.Emulator;
+import emulator.debug.GameDataInspector;
 import emulator.KeyMapping;
 import emulator.Settings;
 import emulator.graphics2D.IImage;
@@ -54,6 +55,7 @@ public abstract class Canvas extends Displayable {
 		this.paint(graphics);
 		graphics._reset(buffer, xray); // paintTicker fix
 		this._paintOverlay(graphics);
+		GameDataInspector.framePresented("Canvas.paint");
 	}
 
 	public void _invokePaint(IImage buffer, IImage xray, int x, int y, int w, int h) {
@@ -66,6 +68,7 @@ public abstract class Canvas extends Displayable {
 		this.paint(graphics);
 		graphics._reset(buffer, xray); // paintTicker fix
 		this._paintOverlay(graphics);
+		GameDataInspector.framePresented("Canvas.paint");
 	}
 
 	protected void _paintOverlay(Graphics graphics) {
