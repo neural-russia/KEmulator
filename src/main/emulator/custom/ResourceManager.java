@@ -1,6 +1,7 @@
 package emulator.custom;
 
 import emulator.Emulator;
+import emulator.debug.GameDataInspector;
 import org.apache.tools.zip.ZipEntry;
 import org.apache.tools.zip.ZipFile;
 
@@ -58,6 +59,7 @@ public final class ResourceManager {
 		} catch (Exception ex) {
 			return Emulator.class.getResourceAsStream(s);
 		}
+		GameDataInspector.resourceOpened(name, data);
 		return new ResourceStream(data, name);
 	}
 
