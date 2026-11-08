@@ -2,7 +2,7 @@ name: Game Inspector compile smoke test
 
 on:
   push:
-    branches: [feature/game-data-inspector]
+    branches: [feature/game-data-inspector-upstream-2.22]
   pull_request:
     branches: [main]
   workflow_dispatch:
