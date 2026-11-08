@@ -2,6 +2,7 @@ package emulator.custom;
 
 import emulator.Emulator;
 import emulator.Settings;
+import emulator.debug.GameDataInspector;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -390,6 +391,12 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 	}
 
 	public final void visitCode() {
+		if (GameDataInspector.isTracingMethods()) {
+			this.method707(1);
+			super.visitLdcInsn(this.className + "." + this.methodName + this.methodDesc);
+			super.visitMethodInsn(Opcodes.INVOKESTATIC,
+					"emulator/debug/GameDataInspector", "methodEntered", "(Ljava/lang/String;)V");
+		}
 		if (Settings.enableMethodTrack) {
 			this.method707(1);
 			super.visitLdcInsn((this.methodName + this.methodDesc));
