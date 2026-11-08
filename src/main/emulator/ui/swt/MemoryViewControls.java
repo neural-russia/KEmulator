@@ -1,6 +1,7 @@
 package emulator.ui.swt;
 
 import emulator.debug.Memory;
+import emulator.debug.GameDataInspector;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.*;
 import org.eclipse.swt.layout.RowLayout;
@@ -17,6 +18,8 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 	private final Label jvmSize;
 	private final Button gc;
 	private final Button packages;
+	private final Button gameTrace;
+	private final Button dumpHeap;
 
 	private int maxObjectsSize = 0;
 	private int objSize;
@@ -86,6 +89,17 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 		packages.setToolTipText("If disabled, package names in class names will be hidden. Disable if you want to see \"Display\" instead of \"javax.microedition.lcdui.Display\".");
 		packages.setSelection(true);
 		packages.addSelectionListener(this);
+
+		gameTrace = new Button(this, SWT.CHECK);
+		gameTrace.setText("Game trace");
+		gameTrace.setToolTipText("Record resources, PNGs, draw calls and frame boundaries; output to game-inspector-output");
+		gameTrace.setSelection(GameDataInspector.isEnabled());
+		gameTrace.addSelectionListener(this);
+
+		dumpHeap = new Button(this, SWT.PUSH);
+		dumpHeap.setText("Dump game heap");
+		dumpHeap.setToolTipText("Export reachable game objects and arrays to JSONL, including short[] and byte[]");
+		dumpHeap.addSelectionListener(this);
 	}
 
 	public void refreshStats() {
@@ -116,6 +130,12 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 			refreshStats(); // one more call after gc
 		} else if (e.widget == packages) {
 			mv.setPkgNamesDisplay(packages.getSelection());
+		} else if (e.widget == gameTrace) {
+			GameDataInspector.setEnabled(gameTrace.getSelection());
+		} else if (e.widget == dumpHeap) {
+			new Thread(new Runnable() {
+				public void run() { GameDataInspector.dumpHeap(); }
+			}, "GameInspectorHeapDump").start();
 		}
 	}
 

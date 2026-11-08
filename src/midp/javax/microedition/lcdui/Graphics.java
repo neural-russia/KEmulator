@@ -7,6 +7,7 @@ import com.jblend.graphics.j3d.Texture;
 import emulator.Emulator;
 import emulator.Settings;
 import emulator.debug.Profiler;
+import emulator.debug.GameDataInspector;
 import emulator.graphics2D.GraphicsUtils;
 import emulator.graphics2D.IGraphics2D;
 import emulator.graphics2D.IImage;
@@ -174,6 +175,11 @@ public class Graphics
 			++image.usedCount;
 			++Profiler.drawImageCallCount;
 			Profiler.drawImagePixelCount += image.getWidth() * image.getHeight();
+			if (GameDataInspector.isEnabled()) {
+				GameDataInspector.drawImage(image, this.image, n, n2,
+						getTranslateX(), getTranslateY(),
+						getClipX(), getClipY(), getClipWidth(), getClipHeight());
+			}
 		}
 	}
 
@@ -240,6 +246,12 @@ public class Graphics
 		++image.usedCount;
 		++Profiler.drawRegionCallCount;
 		Profiler.drawRegionPixelCount += Math.abs(w * h);
+		if (GameDataInspector.isEnabled()) {
+			GameDataInspector.drawRegion(image, this.image,
+					sx, sy, w, h, t, dx, dy, w, h, a,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
+		}
 	}
 
 	public void _drawRegion(final Image image, final int sx, final int sy, final int w, final int h, final int t, final int dx, final int dy, int dw, int dh, final int a) {
@@ -273,6 +285,12 @@ public class Graphics
 		++image.usedCount;
 		++Profiler.drawRegionCallCount;
 		Profiler.drawRegionPixelCount += Math.abs(w * h);
+		if (GameDataInspector.isEnabled()) {
+			GameDataInspector.drawRegion(image, this.image,
+					sx, sy, w, h, t, dx, dy, dw, dh, a,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
+		}
 	}
 
 	public void drawRGB(final int[] rgbData, final int offset, final int scanlength, final int x, final int y, final int width, final int height, final boolean processAlpha) {
@@ -283,6 +301,11 @@ public class Graphics
 		this._drawRegion(GraphicsUtils.setImageData(rgbData, processAlpha, offset, scanlength, width, height), 0, 0, width, height, this.impl.getTransform().newTransform(width, height, 0, x, y, 0), 0xFF0000);
 		++Profiler.drawRGBCallCount;
 		Profiler.drawRGBPixelCount += Math.abs(width * height);
+		if (GameDataInspector.isEnabled())
+			GameDataInspector.drawRGB(rgbData, offset, scanlength,
+					this.image, x, y, width, height, processAlpha,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
 	}
 
 	public void drawChar(final char c, final int n, final int n2, final int n3) {

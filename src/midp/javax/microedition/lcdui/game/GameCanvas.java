@@ -1,6 +1,7 @@
 package javax.microedition.lcdui.game;
 
 import emulator.Emulator;
+import emulator.debug.GameDataInspector;
 
 import javax.microedition.lcdui.Canvas;
 import javax.microedition.lcdui.Displayable;
@@ -41,6 +42,7 @@ public abstract class GameCanvas extends Canvas {
 		_paintOverlay(graphics == null ? getGraphics() : graphics);
 		Emulator.getEventQueue().gameGraphicsFlush(x, y, w, h);
 		Displayable._resetXRayGraphics();
+		GameDataInspector.framePresented("GameCanvas.flush");
 	}
 
 	public void flushGraphics() {
@@ -50,6 +52,7 @@ public abstract class GameCanvas extends Canvas {
 		_paintOverlay(graphics == null ? getGraphics() : graphics);
 		Emulator.getEventQueue().gameGraphicsFlush();
 		Displayable._resetXRayGraphics();
+		GameDataInspector.framePresented("GameCanvas.flush");
 	}
 
 	public void _invokeSizeChanged(int w, int h) {
