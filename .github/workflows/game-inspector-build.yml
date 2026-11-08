@@ -20,9 +20,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/inspector-ci
-          find src/main src/media src/midp src/nnapi src/nokia src/oem src/3d \
-               m3g_stub/src micro3d_stub/src -name '*.java' \
-               ! -path 'micro3d_stub/src/javax/microedition/lcdui/Graphics.java' > build/inspector-sources.txt
+          find src/main src/media src/midp src/nnapi src/nokia src/oem src/3d -name '*.java' > build/inspector-sources.txt
           javac -J-Xmx2g -encoding UTF-8 -source 8 -target 8 \
             -cp "home/swt-win32-x86.jar:lib/*:home/*" \
             -d build/inspector-ci @build/inspector-sources.txt
