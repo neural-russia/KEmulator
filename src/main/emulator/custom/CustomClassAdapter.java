@@ -1,5 +1,6 @@
 package emulator.custom;
 
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Settings;
 import org.objectweb.asm.ClassVisitor;
@@ -38,21 +39,16 @@ public final class CustomClassAdapter extends ClassVisitor implements Opcodes {
 			}
 			desc = desc.replace(s4, s5);
 		}
-		if (Settings.patchSynchronizedPaint &&
-				"paint".equals(name) && "(Ljavax/microedition/lcdui/Graphics;)V".equals(desc)) {
+		if ("paint".equals(name) && "(Ljavax/microedition/lcdui/Graphics;)V".equals(desc)) {
 			if ((acc & Opcodes.ACC_SYNCHRONIZED) != 0) {
-				acc = acc & (~Opcodes.ACC_SYNCHRONIZED);
-				Emulator.getEmulator().getLogStream().println("Patched paint method: " + className);
+				Emulator.getEmulator().getLogStream().println("Synchronized paint method found, forcing synchronized key events");
+				AppSettings.synchronizeKeyEvents = true;
 			}
-		} else if (Settings.patchSynchronizedPlayerUpdate &&
-				"playerUpdate".equals(name) && "(Ljavax/microedition/media/Player;Ljava/lang/String;Ljava/lang/Object;)V".equals(desc)) {
-			if ((acc & Opcodes.ACC_SYNCHRONIZED) != 0) {
-				acc = acc & (~Opcodes.ACC_SYNCHRONIZED);
-				Emulator.getEmulator().getLogStream().println("Patched playerUpdate method: " + className);
-			}
-		} else if ("()V".equals(desc) && "java/lang/Thread".equals(parentClassName) &&
-				("stop".equals(name) || "resume".equals(name) || "suspend".equals(name))) {
-			Emulator.getEmulator().getLogStream().println("Patched illegal Thread method name: " + className);
+		} else if ("()V".equals(desc)
+				&& (("java/lang/Thread".equals(parentClassName) &&
+					("stop".equals(name) || "resume".equals(name) || "suspend".equals(name)))
+					|| "finalize".equals(name))) {
+			Emulator.getEmulator().getLogStream().println("Patched illegal Thread method name: " + className + '.' + name + desc);
 			hasRenamedMethods = true;
 			renamedClasses.add(className.replace('.', '/'));
 			name = name + "_";
@@ -73,6 +69,9 @@ public final class CustomClassAdapter extends ClassVisitor implements Opcodes {
 	}
 
 	public final void visit(final int n, final int n2, final String s, final String s2, String s3, final String[] array) {
+		if ((n & 0xFFFF) >= Opcodes.V1_5) {
+			throw new Error("Invalid class version: " + n);
+		}
 		parentClassName = s3;
 //		System.out.println("visit " + s + " " + s2 + " " + s3 + " " + Arrays.toString(array));
 		for (int i = 0; i < array.length; ++i) {

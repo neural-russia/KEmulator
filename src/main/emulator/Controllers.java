@@ -44,11 +44,12 @@ public class Controllers {
 				if (!controller.getType().equals(Controller.Type.KEYBOARD)
 						&& !controller.getType().equals(Controller.Type.MOUSE)) {
 					String s = controller.getName();
-					if (s.contains("tablet")) continue;
-					if (s.contains("STAR")) continue;
-					if (s.contains("Gaming Keyboard")) continue;
-					if (s.contains("Gaming Mouse")) continue;
-					if (s.contains("Microphone")) continue;
+					if (s.toLowerCase().contains("tablet")
+							|| s.contains("STAR")
+							|| s.contains("Gaming Keyboard")
+							|| s.contains("Gaming Mouse")
+							|| s.contains("Microphone"))
+						continue;
 					list.add(controller);
 				}
 			}
@@ -108,7 +109,7 @@ public class Controllers {
 			Controllers.binds[i][18] = "11";
 
 			// TODO remove
-			if (name.toLowerCase().contains("xbox")) {
+			if (name.toLowerCase().contains("xbox") || name.toLowerCase().contains("x-box")) {
 				Settings.controllerZMap = 5;
 				Settings.controllerRZMap = 5;
 			}

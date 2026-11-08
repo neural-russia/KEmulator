@@ -1,6 +1,8 @@
 package javax.microedition.io;
 
+import emulator.AppSettings;
 import emulator.Emulator;
+import emulator.custom.ResourceConnectionStream;
 import emulator.custom.ResourceManager;
 
 import java.io.ByteArrayInputStream;
@@ -11,8 +13,9 @@ import java.io.InputStream;
 final class ResourceConnectionImpl implements InputConnection {
 	String url;
 
-	ResourceConnectionImpl(final String s) {
+	ResourceConnectionImpl(String s) {
 		Emulator.getEmulator().getLogStream().println("Resource opened: " + s);
+		s = s.trim().replace("\\", "/");
 		if (s.startsWith("resource://")) {
 			this.url = s.substring("resource://".length());
 		} else {
@@ -27,10 +30,17 @@ final class ResourceConnectionImpl implements InputConnection {
 	public final InputStream openInputStream() throws IOException {
 		if ("!blank".equals(url))
 			return new ByteArrayInputStream(new byte[0]);
-		InputStream i = ResourceManager.getResourceAsStream(url);
-		if (i == null)
+
+		final InputStream i = ResourceManager.getResourceAsStream(url);
+		if (i == null) {
 			throw new ConnectionNotFoundException(url);
-		return i;
+		}
+
+		if (Emulator.doja || AppSettings.softbankApi) {
+			return i;
+		}
+
+		return new ResourceConnectionStream(i);
 	}
 
 	public final void close() {

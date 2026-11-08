@@ -5,7 +5,7 @@ import com.samsung.util.AudioClip;
 import emulator.Emulator;
 import emulator.Settings;
 import emulator.graphics2D.IImage;
-import org.apache.tools.zip.ZipFile;
+import sun.misc.Unsafe;
 
 import javax.microedition.lcdui.Image;
 import javax.microedition.m3g.*;
@@ -34,6 +34,7 @@ public final class Memory {
 	static Class _F;
 	static Class _D;
 	static Class _C;
+	private static Unsafe unsafe;
 
 	public static final Object m3gLock = new Object();
 
@@ -48,6 +49,26 @@ public final class Memory {
 		return inst;
 	}
 
+	private static Unsafe getUnsafeInstance() {
+		final Field[] declaredFields = Unsafe.class.getDeclaredFields();
+		for (final Field field : declaredFields) {
+			if (field.getType().equals(Unsafe.class)) {
+				final int modifiers = field.getModifiers();
+				if (Modifier.isStatic(modifiers)) {
+					if (Modifier.isFinal(modifiers)) {
+						try {
+							field.setAccessible(true);
+							return (Unsafe) field.get(null);
+						} catch (Exception ex) {
+							break;
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+
 	private Memory() {
 		super();
 		this.instances = new HashSet<>();
@@ -58,6 +79,12 @@ public final class Memory {
 		checkClasses.add("javax.microedition.lcdui.Display");
 		checkClasses.add("javax.microedition.lcdui.Form");
 		checkClasses.add("javax.microedition.lcdui.Graphics");
+		checkClasses.add("javax.microedition.lcdui.game.Sprite");
+		checkClasses.add("javax.microedition.lcdui.game.TiledLayer");
+
+		try {
+			unsafe = getUnsafeInstance();
+		} catch (Throwable ignored) {}
 	}
 
 	public synchronized void updateEverything() {
@@ -75,11 +102,18 @@ public final class Memory {
 		instances.clear();
 		images.clear();
 		m3gObjects.clear();
+		players.clear();
+		images.clear();
 
 		// players
 		try {
-			players.clear(); // here go mmapi ones. Others will be collected from heap later.
+			 // here go mmapi ones. Others will be collected from heap later.
 			players.addAll(PlayerImpl.players);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		try {
+			images.addAll(Image.images);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -140,8 +174,17 @@ public final class Memory {
 		}
 	}
 
+	public boolean isNotInitialized(Class cls) {
+		try {
+			return unsafe != null && unsafe.shouldBeInitialized(cls);
+		} catch (Throwable ignored) {
+			// not available in 22+
+			return false;
+		}
+	}
+
 	private void collectObjects(final Class clazz, final Object o, final ReferencePath path, boolean vector) {
-		if (clazz.isInterface())
+		if (clazz.isInterface() || isNotInitialized(clazz))
 			return;
 
 		String clazzName = clazz.getName();
@@ -177,7 +220,7 @@ public final class Memory {
 			instances.add(ow);
 			try {
 				if (o instanceof Image) {
-					this.images.add((Image) o);
+					if (!images.contains(o)) this.images.add((Image) o);
 					if (Settings.recordReleasedImg && this.releasedImages.contains(o)) {
 						this.releasedImages.remove(o); // this image is still alive
 					}
@@ -204,7 +247,9 @@ public final class Memory {
 					}
 					return;
 				}
-				if (o.getClass().getName().equals("com.mascotcapsule.micro3d.v3.Texture") && Emulator.getPlatform().supportsMascotCapsule()) {
+				if ((clazzName.equals("com.mascotcapsule.micro3d.v3.Texture")
+						|| clazzName.equals("com.jblend.graphics.j3d.Texture"))
+						&& !Emulator.jarClasses.contains(clazzName)) {
 					IImage img = MemoryViewImage.createFromMicro3DTexture(o);
 					if (img != null) {
 						MemoryViewImage mvi = new MemoryViewImage(img, MemoryViewImageType.Micro3D, o);
@@ -239,7 +284,9 @@ public final class Memory {
 						this.collectObjects(value.getClass(), value, path.append(value, i), true);
 					}
 				}
-			} else if (o instanceof Vector) {
+				return;
+			}
+			if (o instanceof Vector) {
 				final Enumeration<Object> elements = (Enumeration<Object>) ((Vector) o).elements();
 				int index = 0;
 				while (elements.hasMoreElements()) {
@@ -283,7 +330,7 @@ public final class Memory {
 				newPath = new ReferencePath(clazz.getName(), true).append(value, fieldName, false);
 			else
 				newPath = path.append(value, fieldName, false);
-			if (!f.getType().isPrimitive() && value != null) {
+			if (!f.getType().isPrimitive() && value != null && value != o) {
 				this.collectObjects(value.getClass(), value, newPath, false);
 			}
 		}
@@ -353,9 +400,14 @@ public final class Memory {
 		addFieldsWithSupers(clazz, vector);
 		for (int i = vector.size() - 1; i >= 0; i--) {
 			Field f = vector.get(i);
-			f.setAccessible(true);
-			if (Modifier.isFinal(f.getModifiers()) && f.getType().isPrimitive())
+			try {
+				f.setAccessible(true);
+				if (Modifier.isFinal(f.getModifiers()) && f.getType().isPrimitive() && Modifier.isStatic(f.getModifiers()))
+					vector.remove(i);
+			} catch (Exception e) {
+				e.printStackTrace();
 				vector.remove(i);
+			}
 		}
 		Field[] array = new Field[vector.size()];
 		return vector.toArray(array);
@@ -376,18 +428,19 @@ public final class Memory {
 			return bytecodeSize;
 		int n = 0;
 		try {
-			if (Emulator.midletJar != null) {
-				final ZipFile zipFile = new ZipFile(Emulator.midletJar);
-				final Enumeration<String> elements = Emulator.jarClasses.elements();
-				while (elements.hasMoreElements()) {
-					final String s;
-					try {
-						if (!cls(s = elements.nextElement()).isInterface()) {
-							n += (int) zipFile.getEntry(s.replace('.', '/') + ".class").getSize();
-						}
-					} catch (Throwable ignored) {
-					}
-				}
+			if (Emulator.midletJarPath != null) {
+                final Enumeration<String> elements = Emulator.jarClasses.elements();
+                while (elements.hasMoreElements()) {
+                    final String s;
+                    try {
+                        if (!cls(s = elements.nextElement()).isInterface()) {
+                            synchronized (Emulator.jarFileLock) {
+                                n += (int) Emulator.midletJar.getEntry(s.replace('.', '/') + ".class").getSize();
+                            }
+                        }
+                    } catch (Throwable ignored) {}
+                }
+
 			} else {
 				final Enumeration<String> elements2 = Emulator.jarClasses.elements();
 				while (elements2.hasMoreElements()) {
@@ -397,8 +450,7 @@ public final class Memory {
 					}
 				}
 			}
-		} catch (Exception ignored) {
-		}
+		} catch (Exception ignored) {}
 		bytecodeSize = n;
 		return n;
 	}
@@ -437,15 +489,15 @@ public final class Memory {
 		// fields
 		for (Field field : fields) {
 			final Class type = field.getType();
-			if ((Modifier.isFinal(field.getModifiers()) && type.isPrimitive()))
+			if ((Modifier.isFinal(field.getModifiers()) && type.isPrimitive() && Modifier.isStatic(field.getModifiers())))
 				continue; // constant primitive field
 
 			if (!Modifier.isStatic(field.getModifiers()) || o == null) {
 				if (Modifier.isStatic(field.getModifiers()) || o != null) {
 					if (type == Long.TYPE || type == Double.TYPE) {
-						res += 24;
+						res += 8;
 					} else {
-						res += 16;
+						res += 4;
 					}
 				}
 			}
@@ -460,7 +512,6 @@ public final class Memory {
 
 		res += 12;
 
-		// TODO investigate
 		if (cls == String.class) {
 			res += 2 * ((String) o).length();
 			return res;
@@ -468,15 +519,13 @@ public final class Memory {
 
 		if (cls == Image.class) {
 			final Image image = (Image) o;
-			res += image.size();
+			res += image._size();
 		} else {
 			try {
 				if (cls == Image2D.class) {
-					final Image2D image2D = (Image2D) o;
-					res += image2D.size();
+					res += ((Image2D) o)._size();
 				}
-			} catch (NoClassDefFoundError ignored) {
-			}
+			} catch (Throwable ignored) {}
 			return res;
 		}
 
@@ -488,22 +537,23 @@ public final class Memory {
 		n += 16;
 		if (o instanceof long[]) {
 			n = 16 + 8 * ((long[]) o).length;
-		} else if (o instanceof int[]) {
-			n = 16 + 4 * ((int[]) o).length;
-		} else if (o instanceof short[]) {
-			n = 16 + 2 * ((short[]) o).length;
-		} else if (o instanceof byte[]) {
-			n = 16 + ((byte[]) o).length;
-		} else if (o instanceof boolean[]) {
-			n = 16 + 4 * ((boolean[]) o).length;
 		} else if (o instanceof double[]) {
 			n = 16 + 8 * ((double[]) o).length;
+		} else if (o instanceof int[]) {
+			n = 16 + 4 * ((int[]) o).length;
 		} else if (o instanceof float[]) {
 			n = 16 + 4 * ((float[]) o).length;
+		} else if (o instanceof short[]) {
+			n = 16 + 2 * ((short[]) o).length;
 		} else if (o instanceof char[]) {
 			n = 16 + 2 * ((char[]) o).length;
+		} else  if (o instanceof byte[]) {
+			n = 16 + ((byte[]) o).length;
+		} else if (o instanceof boolean[]) {
+			n = 16 + ((boolean[]) o).length;
 		} else {
-			boolean isArrayOfObjs = ClassTypes.isObject(clazz.getComponentType());
+			boolean isArrayOfObjs = ClassTypes.isObject(clazz.getComponentType())
+					|| clazz.getComponentType() == String.class;
 			if (o instanceof Object[]) {
 				Object[] oo = (Object[]) o;
 				for (int i = oo.length - 1; i >= 0; --i) {
@@ -519,8 +569,8 @@ public final class Memory {
 				}
 			} else {
 				for (int i = Array.getLength(o) - 1; i >= 0; --i) {
-					final Object value;
-					if ((value = Array.get(o, i)) != null && !isArrayOfObjs) {
+					final Object value = Array.get(o, i);
+					if (value != null && !isArrayOfObjs) {
 						Class cls = value.getClass();
 						n += this.size(cls, fields(cls), value);
 					} else if (value != null && value.getClass().isArray()) {

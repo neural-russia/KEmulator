@@ -1,6 +1,8 @@
 package emulator.custom;
 
 import emulator.Emulator;
+import emulator.debug.GameDataInspector;
+import emulator.Settings;
 import org.apache.tools.zip.ZipEntry;
 import org.apache.tools.zip.ZipFile;
 
@@ -17,12 +19,12 @@ public final class ResourceManager {
 		String name = s;
 		byte[] data;
 		try {
-			if (Emulator.midletJar != null) {
+			if (Emulator.midletJarPath != null) {
 				while (name.length() > 0 && name.startsWith("/")) {
 					name = name.substring(1);
 				}
-				final ZipFile zipFile = new ZipFile(Emulator.midletJar);
-				try {
+				synchronized (Emulator.jarFileLock) {
+					ZipFile zipFile = Emulator.midletJar;
 					ZipEntry entry;
 					if ((entry = zipFile.getEntry(name)) == null) {
 						// try again by searching entry ignoring case
@@ -42,8 +44,6 @@ public final class ResourceManager {
 					data = new byte[(int) entry.getSize()];
 					Emulator.getEmulator().getLogStream().println("Custom.jar.getResourceStream: " + s + " (" + data.length + ")");
 					new DataInputStream(zipFile.getInputStream(entry)).readFully(data);
-				} finally {
-					zipFile.close();
 				}
 			} else {
 				final File fileFromClassPath;
@@ -53,10 +53,20 @@ public final class ResourceManager {
 				}
 				data = new byte[(int) fileFromClassPath.length()];
 				Emulator.getEmulator().getLogStream().println("Custom.path.getResourceStream: " + s + " (" + fileFromClassPath.length() + ")");
-				new DataInputStream(new FileInputStream(fileFromClassPath)).readFully(data);
+				try (DataInputStream in = new DataInputStream(new FileInputStream(fileFromClassPath))) {
+					in.readFully(data);
+				}
 			}
 		} catch (Exception ex) {
+			if (Settings.hideEmulation) {
+				return null;
+			}
 			return Emulator.class.getResourceAsStream(s);
+		}
+
+		GameDataInspector.resourceOpened(name, data);
+		if (Settings.hideEmulation) {
+			return new ByteArrayInputStream(data);
 		}
 		return new ResourceStream(data, name);
 	}
@@ -84,26 +94,29 @@ public final class ResourceManager {
 		return getBytes(((s.indexOf(58) != -1) ? ((InputConnection) Connector.open(s, Connector.READ)).openInputStream() : getResourceAsStream(s)));
 	}
 
-	public static byte[] getBytes(final InputStream inputStream) throws IOException {
-		if (inputStream == null) {
+	public static byte[] getBytes(InputStream in) throws IOException {
+		if (in == null) {
 			return null;
+		}
+		if (in instanceof ResourceConnectionStream) {
+			in = ((ResourceConnectionStream) in).in;
 		}
 		try {
 			int available;
-			if ((available = inputStream.available()) <= 0) {
+			if ((available = in.available()) < 128) {
 				available = 128;
 			}
 			final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream(available);
 			final byte[] array = new byte[available];
 			int read;
-			while ((read = inputStream.read(array)) > 0) {
+			while ((read = in.read(array)) != -1) {
 				byteArrayOutputStream.write(array, 0, read);
 			}
 			final byte[] byteArray = byteArrayOutputStream.toByteArray();
 			byteArrayOutputStream.close();
 			return byteArray;
 		} finally {
-			inputStream.close();
+			in.close();
 		}
 	}
 
@@ -112,12 +125,12 @@ public final class ResourceManager {
 			throw new IllegalArgumentException("input = null");
 		}
 		int available;
-		if ((available = i.available()) <= 0) {
+		if ((available = i.available()) < 128) {
 			available = 128;
 		}
 		final byte[] buf = new byte[available];
 		int read;
-		while ((read = i.read(buf)) > 0) {
+		while ((read = i.read(buf)) != -1) {
 			o.write(buf, 0, read);
 		}
 		i.close();

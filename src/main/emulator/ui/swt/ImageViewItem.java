@@ -1,3 +1,6 @@
+/*
+Copyright (c) 2025 Fyodor Ryzhov
+*/
 package emulator.ui.swt;
 
 import emulator.Settings;
@@ -49,11 +52,11 @@ public class ImageViewItem {
 	}
 
 	public boolean ensureCache() {
-		if (allowCache) {
-			if (cache == null)
-				cache = new org.eclipse.swt.graphics.Image(null, CopyUtils.toSwt(((ImageAWT) drawable.getImpl()).getBufferedImage()));
-			return true;
-		}
+//		if (allowCache) {
+//			if (cache == null)
+//				cache = new org.eclipse.swt.graphics.Image(null, CopyUtils.toSwt(((ImageAWT) drawable.getImpl()).getBufferedImage()));
+//			return true;
+//		}
 		return false;
 	}
 
@@ -62,4 +65,14 @@ public class ImageViewItem {
 	}
 
 	private final static String[] m3gTypes = new String[]{"A", "L", "LA", "RGB", "RGBA"};
+
+
+	public final void finalize() {
+		SWTFrontend.syncExec(() -> {
+			if (cache != null && !cache.isDisposed()) {
+				cache.dispose();
+			}
+		});
+	}
+
 }

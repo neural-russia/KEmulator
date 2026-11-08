@@ -1,3 +1,6 @@
+/*
+Copyright (c) 2025 Fyodor Ryzhov
+*/
 package emulator.ui.bridge;
 
 import emulator.Emulator;
@@ -37,6 +40,11 @@ final class BridgeOutput implements IScreen {
 		this.screenImageAwt = new ImageAWT(w, h, false, -1);
 		this.backBufferImageAwt = new ImageAWT(w, h, false, -1);
 		this.xrayScreenImageAwt = new ImageAWT(w, h, true, -1);
+	}
+
+	@Override
+	public void initScreen(int w, int h) {
+
 	}
 
 	@Override

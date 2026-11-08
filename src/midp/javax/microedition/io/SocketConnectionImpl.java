@@ -2,14 +2,16 @@ package javax.microedition.io;
 
 import emulator.Emulator;
 
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
 import java.io.*;
 import java.net.Socket;
 
-final class SocketConnectionImpl implements SocketConnection
+class SocketConnectionImpl implements SocketConnection
 {
 	Socket socket;
 	
-	public SocketConnectionImpl(final String s) throws IOException {
+	SocketConnectionImpl(final String s) throws IOException {
 		super();
 		Emulator.getEmulator().getLogStream().println("Socket opened: " + s);
 		final int n = s.indexOf("://") + 3;
@@ -17,10 +19,13 @@ final class SocketConnectionImpl implements SocketConnection
 		socket = new Socket(s.substring(n, n2 - 1), Integer.parseInt(s.substring(n2)));
 	}
 
-	public SocketConnectionImpl(Socket socket) throws IOException {
-		this.socket = socket;
+	SocketConnectionImpl(Socket s) {
+		this.socket = s;
 	}
-	
+
+	SocketConnectionImpl() {
+	}
+
 	public final String getAddress() throws IOException {
 		return socket.getInetAddress().getHostAddress();
 	}
@@ -43,7 +48,7 @@ final class SocketConnectionImpl implements SocketConnection
 		}
 		switch (b) {
 			case DELAY: {
-				return socket.getTcpNoDelay() ?  1 : 0;
+				return socket.getTcpNoDelay() ? 1 : 0;
 			}
 			case LINGER: {
 				int value = socket.getSoLinger();
@@ -71,7 +76,7 @@ final class SocketConnectionImpl implements SocketConnection
 				break;
 			}
 			case LINGER: {
-				if (value <= 0) {
+				if (value < 0) {
 					throw new IllegalArgumentException();
 				}
 				socket.setSoLinger(value != 0, value);

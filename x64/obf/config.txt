@@ -44,6 +44,8 @@
 
 -keep public class ru.nnproject.kemulator.** { *; }
 
+-keep public class ru.nnproject.symbiangl.** { *; }
+
 -keep class javax.microedition.m3g.** { *; }
 
 -keep class net.rim.device.api.** { *; }
@@ -100,6 +102,7 @@
 # EMULATOR CLASSES
 -keep class emulator.Emulator { public static *; }
 -keep class emulator.Settings { public static *; }
+-keep class emulator.AppSettings { public static *; }
 -keep class emulator.Agent { public static *; }
 -keep class emulator.Utils { public static *; }
 
@@ -107,7 +110,7 @@
 -keep public class emulator.graphics2D.awt.* { public protected *; }
 -keep class emulator.graphics2D.IImage { *; }
 
--keep class javazoom.jl.player.JavaSoundAudioDevice
+-keep class emulator.javazoom.jl.player.JavaSoundAudioDevice
 
 # Debug & custom
 -keep class emulator.debug.Memory { public static *; }
@@ -141,3 +144,12 @@
 -keepclasseswithmembers,includedescriptorclasses,allowshrinking class * {
     native <methods>;
 }
+
+# JNA
+
+-keep class * extends com.sun.jna.Library { *; }
+-keep class * extends com.sun.jna.Structure { *; }
+-keep class * extends com.sun.jna.Callback { *; }
+
+-keep interface emulator.media.mmf.* { *; }
+-keepclassmembers class emulator.media.mmf.MaDll { *** callback; *** audioPhraseCallback; }

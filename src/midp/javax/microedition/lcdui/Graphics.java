@@ -4,9 +4,11 @@ import com.jblend.graphics.j3d.Effect3D;
 import com.jblend.graphics.j3d.Figure;
 import com.jblend.graphics.j3d.FigureLayout;
 import com.jblend.graphics.j3d.Texture;
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Settings;
 import emulator.debug.Profiler;
+import emulator.debug.GameDataInspector;
 import emulator.graphics2D.GraphicsUtils;
 import emulator.graphics2D.IGraphics2D;
 import emulator.graphics2D.IImage;
@@ -76,7 +78,7 @@ public class Graphics
 	}
 
 	public IGraphics2D getImpl() {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			return this.xrayGraphics;
 		}
 		return this.impl;
@@ -169,11 +171,16 @@ public class Graphics
 				n2 = n5 - height;
 			}
 
-			impl.drawImage(image.getImpl(), n, n2);
+			impl.drawImage(image._getImpl(), n, n2);
 			updateDebugData(image, 0, 0, n, n2, image.getWidth(), image.getHeight());
 			++image.usedCount;
 			++Profiler.drawImageCallCount;
 			Profiler.drawImagePixelCount += image.getWidth() * image.getHeight();
+			if (GameDataInspector.isEnabled()) {
+				GameDataInspector.drawImage(image, this.image, n, n2,
+						getTranslateX(), getTranslateY(),
+						getClipX(), getClipY(), getClipWidth(), getClipHeight());
+			}
 		}
 	}
 
@@ -189,7 +196,7 @@ public class Graphics
 			this.impl.transform(transform);
 			this.impl.drawImage(image, n, n2, n3, n4, 0, 0, n3, n4);
 			this.impl.setTransform(transform2);
-			if (n5 >= 0 && Settings.xrayView && xrayGraphics != null) {
+			if (n5 >= 0 && AppSettings.xrayView && xrayGraphics != null) {
 				this.xrayGraphics.transform(transform);
 				if (Settings.xrayOverlapScreen) {
 					this.xrayGraphics.drawImage(image, n, n2, n3, n4, 0, 0, n3, n4);
@@ -217,7 +224,7 @@ public class Graphics
 		if (sx < 0 || sx + w > image.getWidth() || sy < 0 || sy + h > image.getHeight()) {
 			throw new IllegalArgumentException("region exceeds the bounds of the source image");
 		}
-		if (image.getImpl() == this.image) {
+		if (image._getImpl() == this.image) {
 			throw new IllegalArgumentException("src is the same image as the destination of this Graphics object");
 		}
 		if (!method294(a, 64)) {
@@ -227,7 +234,7 @@ public class Graphics
 			final ITransform transform2 = this.impl.getTransform();
 			final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
 			this.impl.transform(transform);
-			this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, w, h);
+			this.impl.drawImage(image._getImpl(), sx, sy, w, h, 0, 0, w, h);
 			this.impl.setTransform(transform2);
 			if (xrayGraphics != null) {
 				this.xrayGraphics.transform(transform);
@@ -240,6 +247,12 @@ public class Graphics
 		++image.usedCount;
 		++Profiler.drawRegionCallCount;
 		Profiler.drawRegionPixelCount += Math.abs(w * h);
+		if (GameDataInspector.isEnabled()) {
+			GameDataInspector.drawRegion(image, this.image,
+					sx, sy, w, h, t, dx, dy, w, h, a,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
+		}
 	}
 
 	public void _drawRegion(final Image image, final int sx, final int sy, final int w, final int h, final int t, final int dx, final int dy, int dw, int dh, final int a) {
@@ -250,7 +263,7 @@ public class Graphics
 		if (sx < 0 || sx + w > image.getWidth() || sy < 0 || sy + h > image.getHeight()) {
 			throw new IllegalArgumentException("region exceeds the bounds of the source image");
 		}
-		if (image.getImpl() == this.image) {
+		if (image._getImpl() == this.image) {
 			throw new IllegalArgumentException("src is the same image as the destination of this Graphics object");
 		}
 		if (!method294(a, 64)) {
@@ -260,7 +273,7 @@ public class Graphics
 			final ITransform transform2 = this.impl.getTransform();
 			final ITransform transform = transform2.newTransform(w, h, t, dx, dy, a);
 			this.impl.transform(transform);
-			this.impl.drawImage(image.getImpl(), sx, sy, w, h, 0, 0, dw, dh);
+			this.impl.drawImage(image._getImpl(), sx, sy, w, h, 0, 0, dw, dh);
 			this.impl.setTransform(transform2);
 			if (xrayGraphics != null) {
 				this.xrayGraphics.transform(transform);
@@ -273,6 +286,12 @@ public class Graphics
 		++image.usedCount;
 		++Profiler.drawRegionCallCount;
 		Profiler.drawRegionPixelCount += Math.abs(w * h);
+		if (GameDataInspector.isEnabled()) {
+			GameDataInspector.drawRegion(image, this.image,
+					sx, sy, w, h, t, dx, dy, dw, dh, a,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
+		}
 	}
 
 	public void drawRGB(final int[] rgbData, final int offset, final int scanlength, final int x, final int y, final int width, final int height, final boolean processAlpha) {
@@ -283,6 +302,11 @@ public class Graphics
 		this._drawRegion(GraphicsUtils.setImageData(rgbData, processAlpha, offset, scanlength, width, height), 0, 0, width, height, this.impl.getTransform().newTransform(width, height, 0, x, y, 0), 0xFF0000);
 		++Profiler.drawRGBCallCount;
 		Profiler.drawRGBPixelCount += Math.abs(width * height);
+		if (GameDataInspector.isEnabled())
+			GameDataInspector.drawRGB(rgbData, offset, scanlength,
+					this.image, x, y, width, height, processAlpha,
+					getTranslateX(), getTranslateY(),
+					getClipX(), getClipY(), getClipWidth(), getClipHeight());
 	}
 
 	public void drawChar(final char c, final int n, final int n2, final int n3) {
@@ -297,28 +321,31 @@ public class Graphics
 		this.drawString(s.substring(n, n + n2), n3, n4, n5);
 	}
 
-	public void drawString(final String s, int x, int y, final int a) {
+	public void drawString(final String s, int x, int y, int a) {
 		++Profiler.drawCallCount;
 		if (s == null) {
 			throw new NullPointerException();
 		}
-		if (!method294(a, 2)) {
+		if (a == HCENTER) {
+			// undocumented nokia behavior??
+			a |= VCENTER;
+		} else if (!method294(a, 2)) {
 			throw new IllegalArgumentException();
 		}
 		final Font font = this.font;
 		final int stringWidth = font.stringWidth(s);
 		final int height = font.getHeight();
 		impl.setFont(font.getImpl());
-		if ((a & 0x8) != 0x0) {
+		if ((a & RIGHT) != 0x0) {
 			x -= stringWidth;
-		} else if ((a & 0x1) != 0x0) {
+		} else if ((a & HCENTER) != 0x0) {
 			x -= stringWidth / 2;
 		}
-		if ((a & 0x20) != 0x0) {
+		if ((a & BOTTOM) != 0x0) {
 			y -= height;
-		} else if ((a & 0x2) != 0x0) {
+		} else if ((a & VCENTER) != 0x0) {
 			y -= height / 2;
-		} else if ((a & 0x40) != 0x0) {
+		} else if ((a & BASELINE) != 0x0) {
 			y -= font.getBaselinePosition();
 		}
 		this.impl.drawString(s, x, y + font.getBaselinePosition());
@@ -398,15 +425,15 @@ public class Graphics
 		final int n8 = clipY2 - clipY;
 		final int n9 = clipX - (n3 - n);
 		final int n10 = clipY - (n4 - n2);
-		image.getUsedRegion().setAlpha(n9, n10, n7, n8, 0);
-		if (!Settings.xrayView || xrayGraphics == null) {
+		image._getUsedRegion().setAlpha(n9, n10, n7, n8, 0);
+		if (!AppSettings.xrayView || xrayGraphics == null) {
 			return;
 		}
 		if (Settings.xrayOverlapScreen) {
-			this.xrayGraphics.drawImage(image.getImpl(), n, n2, n5, n6, n3, n4, n5, n6);
+			this.xrayGraphics.drawImage(image._getImpl(), n, n2, n5, n6, n3, n4, n5, n6);
 		}
-		if (image.isMutable() && image.getXRayBuffer() != null) {
-			this.xrayGraphics.drawImage(image.getXRayBuffer(), n3, n4);
+		if (image.isMutable() && image._getXRayBuffer() != null) {
+			this.xrayGraphics.drawImage(image._getXRayBuffer(), n3, n4);
 		}
 		this.xrayFillRect(n3, n4, n5, n6, 16777215);
 		if (Settings.xrayShowClipBorder) {
@@ -418,7 +445,7 @@ public class Graphics
 	}
 
 	private void xrayFillArc(final int n, final int n2, final int n3, final int n4, final int n5, final int n6) {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			this.xrayGraphics.setColor(16777215, false);
 			this.xrayGraphics.fillArc(n, n2, n3, n4, n5, n6);
 			this.xrayUpdate();
@@ -426,7 +453,7 @@ public class Graphics
 	}
 
 	private void xrayDrawArc(final int n, final int n2, final int n3, final int n4, final int n5, final int n6) {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			this.xrayGraphics.setColor(16777215, false);
 			this.xrayGraphics.drawArc(n, n2, n3, n4, n5, n6);
 			this.xrayUpdate();
@@ -434,7 +461,7 @@ public class Graphics
 	}
 
 	private void xrayFillRect(final int n, final int n2, final int n3, final int n4, final int n5) {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			this.xrayGraphics.setColor(n5, false);
 			this.xrayGraphics.fillRect(n, n2, n3, n4);
 			this.xrayUpdate();
@@ -442,7 +469,7 @@ public class Graphics
 	}
 
 	private void xrayDrawRect(final int n, final int n2, final int n3, final int n4) {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			this.xrayGraphics.setColor(16777215, false);
 			this.xrayGraphics.drawRect(n, n2, n3, n4);
 			this.xrayUpdate();
@@ -450,7 +477,7 @@ public class Graphics
 	}
 
 	private void xrayDrawLine(final int n, final int n2, final int n3, final int n4) {
-		if (Settings.xrayView && xrayGraphics != null) {
+		if (AppSettings.xrayView && xrayGraphics != null) {
 			this.xrayGraphics.setColor(16777215, false);
 			this.xrayGraphics.drawLine(n, n2, n3, n4);
 			this.xrayUpdate();
@@ -463,7 +490,7 @@ public class Graphics
 		}
 	}
 
-	protected static void resetXRayCache() {
+	static void resetXRayCache() {
 		for (int i = Graphics.xrayCache.size() - 1; i >= 0; --i) {
 			final IImage image;
 			final IGraphics2D graphics;

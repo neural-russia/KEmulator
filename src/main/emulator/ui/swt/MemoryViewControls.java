@@ -1,6 +1,11 @@
+/*
+Copyright (c) 2025 Fyodor Ryzhov
+*/
 package emulator.ui.swt;
 
+import emulator.Settings;
 import emulator.debug.Memory;
+import emulator.debug.GameDataInspector;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.events.*;
 import org.eclipse.swt.layout.RowLayout;
@@ -17,9 +22,12 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 	private final Label jvmSize;
 	private final Button gc;
 	private final Button packages;
+	private final Button gameTrace;
+	private final Button dumpHeap;
 
 	private int maxObjectsSize = 0;
 	private int objSize;
+	private int imgsSize;
 
 	private int interval = 500;
 
@@ -86,11 +94,24 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 		packages.setToolTipText("If disabled, package names in class names will be hidden. Disable if you want to see \"Display\" instead of \"javax.microedition.lcdui.Display\".");
 		packages.setSelection(true);
 		packages.addSelectionListener(this);
+
+		gameTrace = new Button(this, SWT.CHECK);
+		gameTrace.setText("Game trace");
+		gameTrace.setToolTipText("Export resources, PNGs, draw commands and frames to game-inspector-output");
+		gameTrace.setSelection(GameDataInspector.isEnabled());
+		gameTrace.addSelectionListener(this);
+
+		dumpHeap = new Button(this, SWT.PUSH);
+		dumpHeap.setText("Dump game heap");
+		dumpHeap.setToolTipText("Save reachable objects, arrays and cached images to JSONL/PNG");
+		dumpHeap.addSelectionListener(this);
 	}
 
 	public void refreshStats() {
 		objSize = mv.memoryMgr.objectsSize();
 		maxObjectsSize = Math.max(maxObjectsSize, objSize);
+		imgsSize = mv.memoryMgr.totalObjectsSize("javax.microedition.lcdui.Image")
+				+ mv.memoryMgr.totalObjectsSize("javax.microedition.m3g.Image2D");
 		getDisplay().asyncExec(this);
 	}
 
@@ -98,7 +119,13 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 	public void run() {
 		long t = Runtime.getRuntime().totalMemory();
 		long f = Runtime.getRuntime().freeMemory();
-		objectsSize.setText(objSize + "B / " + maxObjectsSize + "B");
+		int s1 = objSize;
+		int s2 = maxObjectsSize;
+		if (!Settings.countImagesInObjectsSize) {
+			s1 -= imgsSize;
+			s2 -= imgsSize;
+		}
+		objectsSize.setText(s1 + " / " + s2 + " bytes");
 		totalSize.setText(((objSize + Memory.getBytecodeSize()) / 1024) + "KiB");
 		jvmSize.setText(((t - f) / 1048576) + "/" + (t / 1048576) + "MiB");
 		this.layout(true, true);
@@ -116,6 +143,12 @@ public class MemoryViewControls extends Composite implements SelectionListener, 
 			refreshStats(); // one more call after gc
 		} else if (e.widget == packages) {
 			mv.setPkgNamesDisplay(packages.getSelection());
+		} else if (e.widget == gameTrace) {
+			GameDataInspector.setEnabled(gameTrace.getSelection());
+		} else if (e.widget == dumpHeap) {
+			new Thread(new Runnable() {
+				public void run() { GameDataInspector.dumpHeap(); }
+			}, "GameInspectorHeapDump").start();
 		}
 	}
 

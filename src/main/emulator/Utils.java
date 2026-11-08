@@ -12,7 +12,8 @@ public class Utils {
 	public static final boolean win = os.startsWith("win");
 	public static final boolean linux = os.contains("linux") || os.contains("nix");
 	public static final boolean macos = os.contains("mac");
-	public static final boolean termux = String.valueOf(System.getProperty("java.vm.vendor")).toLowerCase().contains("termux");
+	public static final boolean termux = String.valueOf(System.getProperty("java.vm.vendor")).toLowerCase().contains("termux")
+			|| String.valueOf(System.getProperty("user.dir")).toLowerCase().startsWith("/data/data/com.termux/");
 
 	// copied from JDK 24
 	public static String translateEscapes(String input) {
@@ -180,17 +181,20 @@ public class Utils {
 			String s = System.getenv("COMPUTERNAME") + System.getProperty("user.name") + System.getenv("PROCESSOR_IDENTIFIER") + System.getenv("PROCESSOR_LEVEL");
 			MessageDigest md = MessageDigest.getInstance("MD5");
 			md.update(s.getBytes());
-			StringBuffer sb = new StringBuffer();
-			byte[] b = md.digest();
-			for (byte aByteData : b) {
-				String hex = Integer.toHexString(0xff & aByteData);
-				if (hex.length() == 1) sb.append('0');
-				sb.append(hex);
-			}
-
-			return sb.toString();
+			return getDigestString(md);
 		} catch (Exception e) {
 			return "null";
 		}
+	}
+
+	static String getDigestString(MessageDigest md) {
+		StringBuffer sb = new StringBuffer();
+		byte[] b = md.digest();
+		for (byte aByteData : b) {
+			String hex = Integer.toHexString(0xff & aByteData);
+			if (hex.length() == 1) sb.append('0');
+			sb.append(hex);
+		}
+		return sb.toString();
 	}
 }

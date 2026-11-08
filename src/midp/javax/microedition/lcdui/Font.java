@@ -1,5 +1,6 @@
 package javax.microedition.lcdui;
 
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.graphics2D.IFont;
 
@@ -33,16 +34,16 @@ public class Font {
 		int mappedSize = 0;
 		switch (size) {
 			case SIZE_MEDIUM: {
-				mappedSize = Emulator.getEmulator().getProperty().getFontMediumSize();
+				mappedSize = AppSettings.fontMediumSize;
 				break;
 			}
 			case SIZE_LARGE: {
-				mappedSize = Emulator.getEmulator().getProperty().getFontLargeSize();
+				mappedSize = AppSettings.fontLargeSize;
 				break;
 			}
 			case SIZE_SMALL:
 			default: {
-				mappedSize = Emulator.getEmulator().getProperty().getFontSmallSize();
+				mappedSize = AppSettings.fontSmallSize;
 				break;
 			}
 		}
@@ -143,7 +144,7 @@ public class Font {
 	// MIDP 3.0
 
 	public static Font createFont(InputStream fontData) throws IOException {
-		int size = Emulator.getEmulator().getProperty().getFontMediumSize();
+		int size = AppSettings.fontMediumSize;
 		IFont font = Emulator.getEmulator().loadFont(fontData, size);
 		if (font == null) {
 			return getDefaultFont();
@@ -157,7 +158,7 @@ public class Font {
 			filteredStyle &= 0xFFFFFFFB;
 		}
 		if (pixelSize <= 0) {
-			pixelSize = Emulator.getEmulator().getProperty().getFontMediumSize();
+			pixelSize = AppSettings.fontMediumSize;
 		}
 		IFont font = Emulator.getEmulator().newFont(name, pixelSize, filteredStyle);
 		return new Font(FACE_SYSTEM, style, SIZE_MEDIUM, font);
@@ -174,7 +175,7 @@ public class Font {
 			filteredStyle &= 0xFFFFFFFB;
 		}
 		if (pixelSize <= 0) {
-			pixelSize = Emulator.getEmulator().getProperty().getFontMediumSize();
+			pixelSize = AppSettings.fontMediumSize;
 		}
 		IFont font = Emulator.getEmulator().newCustomFont(face, pixelSize, filteredStyle, false);
 		return new Font(face, style, size, font);

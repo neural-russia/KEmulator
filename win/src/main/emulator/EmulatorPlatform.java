@@ -1,12 +1,8 @@
 package emulator;
 
-import emulator.debug.MemoryViewImage;
-import emulator.graphics2D.IImage;
 import emulator.graphics3D.IGraphics3D;
-import ru.woesss.j2me.micro3d.TextureImpl;
 
 import java.io.File;
-import java.nio.IntBuffer;
 
 public class EmulatorPlatform implements IEmulatorPlatform {
 
@@ -23,25 +19,10 @@ public class EmulatorPlatform implements IEmulatorPlatform {
 	}
 
 	public String getInfoString(String version) {
-		return "KEmulator nnmod " + version + "\n\n\t" +
-				UILocale.get("ABOUT_INFO_EMULATOR", "Mobile Game Emulator") + "\n\n" +
-				UILocale.get("ABOUT_INFO_APIS", "Support APIs") + ":\n\n"
-				+ "\tMIDP 2.0 (JSR118)\n"
-				+ "\tNokiaUI 1.4\n"
-				+ "\tSamsung 1.0\n"
-				+ "\tSprint 1.0\n"
-				+ "\tSiemens API\n"
-				+ "\tWMA 1.0 (JSR120)\n"
-				+ "\tSensor (JSR256)\n"
-				+ "\tM3G 1.1 (JSR184)\n"
-				+ "\tOpenGL ES (JSR239)\n"
-				+ "\tMascotCapsule v3\n"
-				+ "\tSoftBank MEXA"
-				;
+		return "KEmulator nnmod " + version;
 	}
 
 	public void loadLibraries() {
-		loadAMR();
 	}
 
 	public boolean supportsMascotCapsule() {
@@ -93,7 +74,7 @@ public class EmulatorPlatform implements IEmulatorPlatform {
 			} catch (Throwable ignored) {
 			}
 			if (!mascotLoaded) {
-				addToClassPath(Settings.micro3d == 0 ? "micro3d_dll.jar" : "micro3d_gl.jar");
+				addToClassPath(Settings.micro3d == 0 ? "micro3d_dll.jar" : Settings.micro3d == 2 ? "micro3d_sw.jar" : "micro3d_gl.jar");
 			}
 		}
 	}
@@ -104,14 +85,6 @@ public class EmulatorPlatform implements IEmulatorPlatform {
 
 	public String[] getLwjglLibraryNames(){
 		return new String[0];
-	}
-
-	private static void loadAMR() {
-		try {
-			System.load(Emulator.getAbsolutePath() + File.separatorChar + "amrdecoder.dll");
-		} catch (Throwable e) {
-			e.printStackTrace();
-		}
 	}
 
 	private static void addToClassPath(String s) {

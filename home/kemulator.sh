@@ -10,7 +10,6 @@ fi
 if [ -x "/usr/lib/jvm/java-1.8-openjdk/bin/java" ]; then
     JAVA="/usr/lib/jvm/java-1.8-openjdk/bin/java"
 fi
-JAVA_VER=$($JAVA -version 2>&1 | awk -F '"' '/version/ {print $2}' | awk -F '.' '{sub("^$", "0", $2); print $1$2}')
 
 # absolute paths to this starter
 # this works even if runned as `bash starter.sh`
@@ -27,8 +26,12 @@ if [[ "$SELF_DIR" =~ ^/(bin|sbin|usr)(/|$) ]]; then
 	KEM_DIR="/usr/share/kemulator"
 else
 	KEM_DIR="$SELF_DIR"
+  if [ -x "${KEM_DIR}/jre/bin/java" ]; then
+    JAVA="${KEM_DIR}/jre/bin/java"
+  fi
 fi
 KEM_JAR="$KEM_DIR/KEmulator.jar"
+JAVA_VER=$($JAVA -version 2>&1 | awk -F '"' '/version/ {print $2}' | awk -F '.' '{sub("^$", "0", $2); print $1$2}')
 
 # Hotspot configuration
 XMX="-Xmx512M"
@@ -37,6 +40,7 @@ ARGS=(
   "-Djna.nosys=true"
   "-Djava.library.path=$KEM_DIR"
   "-Dfile.encoding=UTF-8"
+  "-Dswt.autoScale=false"
   "-javaagent:$KEM_JAR"
   "-XX:+IgnoreUnrecognizedVMOptions"
 )
@@ -53,12 +57,19 @@ then
     "--add-opens" "java.base/java.lang.reflect=ALL-UNNAMED"
     "--add-opens" "java.base/java.lang.ref=ALL-UNNAMED"
     "--add-opens" "java.base/java.io=ALL-UNNAMED"
+    "--add-opens" "java.base/java.nio=ALL-UNNAMED"
     "--add-opens" "java.base/java.util=ALL-UNNAMED"
     "--add-opens" "jdk.unsupported/sun.misc=ALL-UNNAMED"
     "--add-opens" "java.desktop/com.sun.media.sound=ALL-UNNAMED"
     "--add-opens" "java.desktop/javax.sound.midi=ALL-UNNAMED"
     "--enable-native-access=ALL-UNNAMED"
+    "-XX:+UseZGC"
   )
+else
+  ARGS+=(
+      "-XX:+UseG1GC"
+      "-XX:MaxGCPauseMillis=50"
+    )
 fi
 
 if [ -z "$1" ]; then
@@ -84,6 +95,6 @@ else
 	USER_JAR=$(realpath "$1")
 	cd "$KEM_DIR" || exit
 	shift
-	"$JAVA" "${ARGS[@]}" -jar "$KEM_JAR" -jar "$USER_JAR" -s "$@"
+	WAYLAND_DISPLAY= GDK_BACKEND=x11 "$JAVA" "${ARGS[@]}" -jar "$KEM_JAR" -jar "$USER_JAR" -s "$@"
 	exit $?
 fi

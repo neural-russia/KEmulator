@@ -1,6 +1,7 @@
 package emulator.custom;
 
 import com.github.sarxos.webcam.Webcam;
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Permission;
 import emulator.Settings;
@@ -30,13 +31,13 @@ public class CustomMethod {
 
 	public static void gc() {
 		++Profiler.gcCallCount;
-		if (!Settings.ignoreGc) {
+		if (!AppSettings.ignoreGc) {
 			System.gc();
 		}
 	}
 
 	public static void yield() throws InterruptedException {
-		if (Settings.patchYield) {
+		if (AppSettings.patchYield) {
 			Thread.sleep(1L);
 		} else {
 			Thread.yield();
@@ -44,12 +45,12 @@ public class CustomMethod {
 	}
 
 	public static void sleep(long t) throws InterruptedException {
-		if (Settings.ignoreSleep) return;
-		if (Settings.applySpeedToSleep && Settings.speedModifier != 1 && t > 1) {
-			if (Settings.speedModifier < 0) {
-				t = t * ((100L - Settings.speedModifier * 1024L) / 100L);
+		if (AppSettings.ignoreSleep) return;
+		if (AppSettings.applySpeedToSleep && AppSettings.speedModifier != 1 && t > 1) {
+			if (AppSettings.speedModifier < 0) {
+				t = t * ((100L - AppSettings.speedModifier * 1024L) / 100L);
 			} else {
-				t = t / Settings.speedModifier;
+				t = t / AppSettings.speedModifier;
 			}
 		}
 		Thread.sleep(t);
@@ -59,7 +60,17 @@ public class CustomMethod {
 	public static String getProperty(final String prop) {
 		String res = System.getProperty(prop);
 		boolean b = true;
-		if (Settings.systemProperties != null && Settings.systemProperties.containsKey(prop)) {
+		if (AppSettings.systemProperties.containsKey(prop)) {
+			res = AppSettings.systemProperties.get(prop);
+			if (res.startsWith(":")) {
+				res = res.substring(1);
+				if (res.equals("null")) {
+					res = null;
+				} else {
+					res = System.getProperty(res);
+				}
+			}
+		} else if (Settings.systemProperties.containsKey(prop)) {
 			res = Settings.systemProperties.get(prop);
 			if (res.startsWith(":")) {
 				res = res.substring(1);
@@ -76,6 +87,8 @@ public class CustomMethod {
 				res = Settings.hideEmulation ? null : "KEmulator";
 			} else if (prop.equalsIgnoreCase("console.encoding")) {
 				res = System.getProperty("file.encoding");
+			} else if (prop.equalsIgnoreCase("file.encoding")) {
+				res = AppSettings.fileEncoding;
 			} else if (prop.equalsIgnoreCase("com.nokia.mid.networkavailability")) {
 				res = Settings.networkNotAvailable ? "unavailable" : "available";
 			} else if (prop.equalsIgnoreCase("com.nokia.mid.batterylevel")) {
@@ -103,11 +116,13 @@ public class CustomMethod {
 					res = Emulator.getEventQueue().getPointerNumber();
 				} catch (Exception ignored) {}
 			} else if (prop.equals("microedition.locale")) {
-				res = Settings.locale;
+				res = AppSettings.locale;
 			} else if (prop.equals("microedition.encoding")) {
-				res = Settings.fileEncoding;
+				res = AppSettings.fileEncoding;
 			} else if (prop.equals("Platform")) {
 				res = "";
+			} else if (prop.equals("device.model")) {
+				res = AppSettings.microeditionPlatform;
 			} else if (prop.equals("fileconn.dir.roots.names")) {
 				res = "Root";
 			} else if(prop.startsWith("kemulator")) {
@@ -116,7 +131,7 @@ public class CustomMethod {
 				} else {
 					try {
 						if (prop.equals("kemulator.libvlc.supported")) {
-							res = String.valueOf(Manager.isLibVlcSupported());
+							res = String.valueOf(Manager._isLibVlcSupported());
 						} else if (prop.equals("kemulator.threadtrace")) {
 							b = false;
 							res = getStackTrace(new Exception("Trace")).replace("\t", "").replace("\r", "");
@@ -126,7 +141,7 @@ public class CustomMethod {
 							if ((res = prop.substring(prop.indexOf('=') + 1)).equals("null")) {
 								res = null;
 							}
-							Settings.customTitle = res;
+							AppSettings.customTitle = res;
 
 							Emulator.getEmulator().getScreen().updateTitle();
 							res = "true";
@@ -162,7 +177,9 @@ public class CustomMethod {
 						res = "false";
 					}
 				}
-			} else if (Settings.hideEmulation && (prop.startsWith("os.") || prop.startsWith("java.") || prop.startsWith("sun."))) {
+			} else if (Settings.hideEmulation &&
+					(prop.startsWith("os.") || prop.startsWith("java.") || prop.startsWith("sun.")
+							|| prop.startsWith("org.pigler.") || prop.startsWith("ru.nnproject."))) {
 				res = null;
 			}
 			// Hide properties of disabled APIs
@@ -191,7 +208,7 @@ public class CustomMethod {
 		++Profiler.currentTimeMillisCallCount;
 		final long currentTimeMillis = System.currentTimeMillis();
 		final long n2;
-		final long n = ((n2 = Settings.speedModifier) < 0L) ? ((100L + n2 << 10) / 100L) : (n2 << 10);
+		final long n = ((n2 = AppSettings.speedModifier) < 0L) ? ((100L + n2 << 10) / 100L) : (n2 << 10);
 		if (Settings.aLong1235 > 0L) {
 			CustomMethod.aLong13 += n * (currentTimeMillis - CustomMethod.aLong17 - Settings.aLong1235) >> 10;
 			CustomMethod.aLong17 = currentTimeMillis;
@@ -245,14 +262,14 @@ public class CustomMethod {
 	}
 
 	public static void beginMethod(final String s) {
-		if (h.aHashtable1061 == null) {
-			h.aHashtable1061 = new Hashtable();
+		if (h.methodProfiles == null) {
+			h.methodProfiles = new Hashtable();
 			h.method591();
 		}
 		final h.MethodInfo methodInfo;
-		if ((methodInfo = (MethodInfo) h.aHashtable1061.get(s)) != null) {
+		if ((methodInfo = (MethodInfo) h.methodProfiles.get(s)) != null) {
 			final int method16 = method16();
-			++methodInfo.anInt1182;
+			++methodInfo.callCount;
 			trackStr = "";
 			for (int i = 0; i < method16; ++i) {
 				trackStr += ("  ");
@@ -265,10 +282,10 @@ public class CustomMethod {
 
 	public static void endMethod(final String s) {
 		final h.MethodInfo methodInfo;
-		if ((methodInfo = (MethodInfo) h.aHashtable1061.get(s)) != null) {
-			if (methodInfo.anInt1182 > 0) {
-				methodInfo.aLong1179 += System.currentTimeMillis() - methodInfo.aLong1174;
-				methodInfo.aFloat1175 = (float) methodInfo.aLong1179 / methodInfo.anInt1182;
+		if ((methodInfo = (MethodInfo) h.methodProfiles.get(s)) != null) {
+			if (methodInfo.callCount > 0) {
+				methodInfo.totalExecutionTime += System.currentTimeMillis() - methodInfo.aLong1174;
+				methodInfo.averageExecutionTime = (float) methodInfo.totalExecutionTime / methodInfo.callCount;
 			}
 			method17();
 		}
@@ -282,6 +299,10 @@ public class CustomMethod {
 		try {
 			Emulator.getEventQueue().stop();
 			Emulator3D.exit();
+		} catch (Throwable ignored) {}
+		// Shutdown whichever Bluetooth backend was selected for this process.
+		try {
+			emulator.bluetooth.BluetoothBackendProvider.shutdown();
 		} catch (Throwable ignored) {}
 		if (trackWriter != null) {
 			try {
@@ -331,6 +352,10 @@ public class CustomMethod {
 
 	public static long freeMemory(Object runtime) {
 		return Math.max(((Runtime) runtime).freeMemory(), 1024 * 1024L + (System.currentTimeMillis() % 1024));
+	}
+
+	public static String getEncoding() {
+		return AppSettings.fileEncoding;
 	}
 
 	static {

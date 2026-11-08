@@ -1,7 +1,9 @@
 package emulator.custom;
 
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Settings;
+import emulator.debug.GameDataInspector;
 import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
@@ -38,6 +40,17 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 				}
 				if (name.equals("exit")) {
 					if (sign.equals("(I)V")) {
+						if (Settings.bypassVserv) {
+							try {
+								// bypass nokia platform check
+								if (methodName.equals("<clinit>") && Emulator.getEmulator().getAppProperty("Nokia-Platform") != null) {
+									Emulator.getEmulator().getLogStream().println("Patched Nokia-Platform check: " + cls + '.' + name + sign);
+									super.visitInsn(Opcodes.POP);
+									return;
+								}
+							} catch (Throwable ignored) {}
+						}
+
 						super.visitMethodInsn(184, "emulator/custom/CustomMethod", "exit", sign);
 						return;
 					}
@@ -60,7 +73,7 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 					super.visitMethodInsn(184, "emulator/custom/CustomMethod", "yield", sign);
 					return;
 				}
-				if ((Settings.patchSleep || Settings.ignoreSleep) && name.equals("sleep")) {
+				if (name.equals("sleep")) {
 					super.visitMethodInsn(184, "emulator/custom/CustomMethod", "sleep", sign);
 					return;
 				}
@@ -76,14 +89,21 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 			} else if (cls.equals("java/lang/String")) {
 				if (name.equals("<init>") && sign.startsWith("([B") && !sign.endsWith("Ljava/lang/String;)V")) {
 					this.method707(1);
-					super.visitLdcInsn(Settings.fileEncoding);
+					super.visitMethodInsn(184, "emulator/custom/CustomMethod", "getEncoding", "()Ljava/lang/String;");
 					super.visitMethodInsn(acc, cls, name, sign.substring(0, sign.length() - 2) + "Ljava/lang/String;)V");
 					return;
 				}
 				if (name.equals("getBytes") && sign.startsWith("()")) {
 					this.method707(1);
-					super.visitLdcInsn(Settings.fileEncoding);
+					super.visitMethodInsn(184, "emulator/custom/CustomMethod", "getEncoding", "()Ljava/lang/String;");
 					super.visitMethodInsn(acc, cls, name, "(Ljava/lang/String;)[B");
+					return;
+				}
+			} else if (cls.equals("java/io/InputStreamReader")) {
+				if (name.equals("<init>") && sign.equals("(Ljava/io/InputStream;)V")) {
+					this.method707(1);
+					super.visitMethodInsn(184, "emulator/custom/CustomMethod", "getEncoding", "()Ljava/lang/String;");
+					super.visitMethodInsn(acc, cls, name, sign.substring(0, sign.length() - 2) + "Ljava/lang/String;)V");
 					return;
 				}
 			} else if (cls.equals("java/util/Vector")) {
@@ -152,6 +172,12 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 						}
 					}
 				}
+				if (cls.equals("java/nio/ByteBuffer") && name.equals("allocateDirect") && sign.equals("(I)Ljava/nio/ByteBuffer;")) {
+					super.visitMethodInsn(acc, cls, name, sign);
+					super.visitMethodInsn(Opcodes.INVOKESTATIC, "java/nio/ByteOrder", "nativeOrder", "()Ljava/nio/ByteOrder;");
+					super.visitMethodInsn(Opcodes.INVOKEVIRTUAL, cls, "order", "(Ljava/nio/ByteOrder;)Ljava/nio/ByteBuffer;");
+					return;
+				}
 				if (Settings.hideEmulation) {
 					if (cls.equals("java/lang/Runtime")) {
 						if (name.equals("totalMemory") || name.equals("freeMemory")) {
@@ -187,7 +213,7 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 			}
 		}
 		if (CustomClassAdapter.hasRenamedMethods && CustomClassAdapter.renamedClasses.contains(cls) && "()V".equals(sign) &&
-				(name.equals("stop") || name.equals("resume") || name.equals("suspend"))) {
+				(name.equals("stop") || name.equals("resume") || name.equals("suspend") || name.equals("finalize"))) {
 			name = name + "_";
 		}
 		super.visitMethodInsn(acc, cls, name, sign);
@@ -390,6 +416,12 @@ public final class CustomMethodAdapter extends MethodVisitor implements Opcodes 
 	}
 
 	public final void visitCode() {
+		if (GameDataInspector.isTracingMethods()) {
+			this.method707(1);
+			super.visitLdcInsn(this.className + "." + this.methodName + this.methodDesc);
+			super.visitMethodInsn(Opcodes.INVOKESTATIC,
+					"emulator/debug/GameDataInspector", "methodEntered", "(Ljava/lang/String;)V");
+		}
 		if (Settings.enableMethodTrack) {
 			this.method707(1);
 			super.visitLdcInsn((this.methodName + this.methodDesc));

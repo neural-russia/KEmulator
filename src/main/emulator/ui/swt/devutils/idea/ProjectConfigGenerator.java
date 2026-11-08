@@ -1,3 +1,6 @@
+/*
+Copyright (c) 2025-2026 Fyodor Ryzhov
+*/
 package emulator.ui.swt.devutils.idea;
 
 import emulator.Emulator;
@@ -18,6 +21,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 
 /**
  * Generates various configuration files for projects.
@@ -75,16 +79,17 @@ public class ProjectConfigGenerator {
 			"/dataSources.local.xml\n";
 
 	public static String buildLocalProguardConfig(String dir, String name, ClasspathEntry[] classpath) {
+		final String nl = System.lineSeparator();
 		StringBuilder sb = new StringBuilder();
 		sb.append("# This config file is gitignored and reset on each deploy.");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("# Actual configuration should live in another file, \"proguard.cfg\" by default.");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		for (String l : JdkTablePatcher.getDevTimeJars()) {
 			sb.append("-libraryjars '");
 			sb.append(l);
 			sb.append("'");
-			sb.append(System.lineSeparator());
+			sb.append(nl);
 		}
 		for (ClasspathEntry c : classpath) {
 			if (c.type != ClasspathEntryType.HeaderLibrary)
@@ -95,159 +100,148 @@ public class ProjectConfigGenerator {
 			else
 				sb.append(c.path);
 			sb.append("'");
-			sb.append(System.lineSeparator());
+			sb.append(nl);
 		}
-
-		sb.append("-injars '").append(Paths.get(dir, "deployed", "raw", name + ".jar")).append("'");
-		sb.append(System.lineSeparator());
-		for (ClasspathEntry c : classpath) {
-			if (c.type != ClasspathEntryType.ExportedLibrary)
-				continue;
-			sb.append("-injars '");
-			if (c.isLocalPath)
-				sb.append(Paths.get(dir).resolve(c.path));
-			else
-				sb.append(c.path);
-			sb.append("'");
-			sb.append(System.lineSeparator());
-		}
-		sb.append("-outjars '").append(Paths.get(dir, "deployed", name + ".jar")).append("'");
-		sb.append(System.lineSeparator());
 		sb.append("-printseeds '").append(Paths.get(dir, "deployed", "pro_seeds.txt")).append("'");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("-printmapping '").append(Paths.get(dir, "deployed", "pro_map.txt")).append("'");
-		sb.append(System.lineSeparator());
-		sb.append("-dontusemixedcaseclassnames -dontnote -defaultpackage '' -microedition -target 1.3 -optimizations !library/*,!code/simplification/object");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
+		sb.append("-dontusemixedcaseclassnames -dontnote -defaultpackage '' -microedition -target 1.2 -optimizations !library/*,!code/simplification/object");
+		sb.append(nl);
 		sb.append("-keep public class * extends javax.microedition.midlet.MIDlet");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("-assumenosideeffects public class java.lang.StringBuffer {");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public java.lang.String toString();");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public char charAt(int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int capacity();");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int codePointAt(int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int codePointBefore(int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int indexOf(java.lang.String,int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int lastIndexOf(java.lang.String);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int lastIndexOf(java.lang.String,int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public int length();");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public java.lang.String substring(int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("    public java.lang.String substring(int,int);");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		sb.append("}");
-		sb.append(System.lineSeparator());
+		sb.append(nl);
 		return sb.toString();
 	}
 
 	public static String buildManifest(String projName, String className, String appName) {
+		final String nl = System.lineSeparator();
 		StringBuilder sb = new StringBuilder();
 
-		sb.append("Manifest-Version: 1.0").append(System.lineSeparator());
-		sb.append("MicroEdition-Configuration: CLDC-1.1").append(System.lineSeparator());
-		sb.append("MicroEdition-Profile: MIDP-2.0").append(System.lineSeparator());
-		sb.append("MIDlet-Vendor: Anonymous developer").append(System.lineSeparator());
-		sb.append("MIDlet-Version: 0.0.1").append(System.lineSeparator());
-		sb.append("MIDlet-Name: ").append(appName).append(System.lineSeparator());
-		sb.append("MIDlet-1: ").append(appName).append(",,").append(className).append(System.lineSeparator());
-		sb.append("MIDlet-Jar-URL: ").append(projName).append(".jar").append(System.lineSeparator());
+		sb.append("Manifest-Version: 1.0").append(nl);
+		sb.append("MicroEdition-Configuration: CLDC-1.1").append(nl);
+		sb.append("MicroEdition-Profile: MIDP-2.0").append(nl);
+		sb.append("MIDlet-Vendor: Anonymous developer").append(nl);
+		sb.append("MIDlet-Version: 0.0.1").append(nl);
+		sb.append("MIDlet-Name: ").append(appName).append(nl);
+		sb.append("MIDlet-1: ").append(appName).append(",,").append(className).append(nl);
+		sb.append("MIDlet-Jar-URL: ").append(projName).append(".jar").append(nl);
 
 		return sb.toString();
 	}
 
 	public static String buildDummyMidlet(String className) {
+		final String nl = System.lineSeparator();
 		String clsName;
 		StringBuilder sb = new StringBuilder();
 
 		if (className.indexOf('.') != -1) {
 			String[] splitted = splitByLastDot(className);
 			clsName = splitted[1];
-			sb.append("package ").append(splitted[0]).append(";").append(System.lineSeparator());
+			sb.append("package ").append(splitted[0]).append(";").append(nl);
 		} else {
 			clsName = className;
 		}
 
-		sb.append("import javax.microedition.lcdui.Display;").append(System.lineSeparator());
-		sb.append("import javax.microedition.lcdui.Form;").append(System.lineSeparator());
-		sb.append("import javax.microedition.midlet.MIDlet;").append(System.lineSeparator());
-		sb.append(System.lineSeparator());
-		sb.append("public class ").append(clsName).append(" extends MIDlet {").append(System.lineSeparator());
-		sb.append("    protected void startApp() {").append(System.lineSeparator());
-		sb.append("        Form f = new Form(\"").append(clsName).append("\");").append(System.lineSeparator());
-		sb.append("        f.append(\"Your MIDlet seems to run.\");").append(System.lineSeparator());
-		sb.append("        Display.getDisplay(this).setCurrent(f);").append(System.lineSeparator());
-		sb.append("    }").append(System.lineSeparator());
-		sb.append(System.lineSeparator());
-		sb.append("    protected void pauseApp() {").append(System.lineSeparator());
-		sb.append("    }").append(System.lineSeparator());
-		sb.append(System.lineSeparator());
-		sb.append("    protected void destroyApp(boolean unconditional) {").append(System.lineSeparator());
-		sb.append("    }").append(System.lineSeparator());
-		sb.append("}").append(System.lineSeparator());
+		sb.append("import javax.microedition.lcdui.Display;").append(nl);
+		sb.append("import javax.microedition.lcdui.Form;").append(nl);
+		sb.append("import javax.microedition.midlet.MIDlet;").append(nl);
+		sb.append(nl);
+		sb.append("public class ").append(clsName).append(" extends MIDlet {").append(nl);
+		sb.append("    protected void startApp() {").append(nl);
+		sb.append("        Form f = new Form(\"").append(clsName).append("\");").append(nl);
+		sb.append("        f.append(\"Your MIDlet seems to run.\");").append(nl);
+		sb.append("        Display.getDisplay(this).setCurrent(f);").append(nl);
+		sb.append("    }").append(nl);
+		sb.append(nl);
+		sb.append("    protected void pauseApp() {").append(nl);
+		sb.append("    }").append(nl);
+		sb.append(nl);
+		sb.append("    protected void destroyApp(boolean unconditional) {").append(nl);
+		sb.append("    }").append(nl);
+		sb.append("}").append(nl);
 
 		return sb.toString();
 	}
 
 	public static String buildModulesFile(String projectName) {
+		final String nl = System.lineSeparator();
 		StringBuilder sb = new StringBuilder();
 
-		sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>").append(System.lineSeparator());
-		sb.append("<project version=\"4\">").append(System.lineSeparator());
-		sb.append("  <component name=\"ProjectModuleManager\">").append(System.lineSeparator());
-		sb.append("    <modules>").append(System.lineSeparator());
+		sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>").append(nl);
+		sb.append("<project version=\"4\">").append(nl);
+		sb.append("  <component name=\"ProjectModuleManager\">").append(nl);
+		sb.append("    <modules>").append(nl);
 		sb.append("      <module fileurl=\"file://$PROJECT_DIR$/")
 				.append(projectName)
 				.append(".iml\" filepath=\"$PROJECT_DIR$/")
 				.append(projectName)
 				.append(".iml\" />")
-				.append(System.lineSeparator());
-		sb.append("    </modules>").append(System.lineSeparator());
-		sb.append("  </component>").append(System.lineSeparator());
+				.append(nl);
+		sb.append("    </modules>").append(nl);
+		sb.append("  </component>").append(nl);
 		sb.append("</project>");
 
 		return sb.toString();
 	}
 
 	public static String buildArtifactConfig(String projectName, boolean eclipseManifest) {
+		final String nl = System.lineSeparator();
 		StringBuilder sb = new StringBuilder();
 
-		sb.append("<component name=\"ArtifactManager\">").append(System.lineSeparator());
-		sb.append("  <artifact type=\"jar\" name=\"").append(projectName).append("\">").append(System.lineSeparator());
-		sb.append("    <output-path>$PROJECT_DIR$/deployed/raw</output-path>").append(System.lineSeparator());
-		sb.append("    <root id=\"archive\" name=\"").append(projectName).append(".jar\">").append(System.lineSeparator());
-		sb.append("      <element id=\"directory\" name=\"META-INF\">").append(System.lineSeparator());
+		sb.append("<component name=\"ArtifactManager\">").append(nl);
+		sb.append("  <artifact type=\"jar\" name=\"").append(projectName).append("\">").append(nl);
+		sb.append("    <output-path>$PROJECT_DIR$/deployed/raw</output-path>").append(nl);
+		sb.append("    <root id=\"archive\" name=\"").append(projectName).append(".jar\">").append(nl);
+		sb.append("      <element id=\"directory\" name=\"META-INF\">").append(nl);
 		if (eclipseManifest)
-			sb.append("        <element id=\"file-copy\" output-file-name=\"MANIFEST.MF\" path=\"$PROJECT_DIR$/Application Descriptor\" />").append(System.lineSeparator());
+			sb.append("        <element id=\"file-copy\" output-file-name=\"MANIFEST.MF\" path=\"$PROJECT_DIR$/Application Descriptor\" />").append(nl);
 		else
-			sb.append("        <element id=\"file-copy\" path=\"$PROJECT_DIR$/META-INF/MANIFEST.MF\" />").append(System.lineSeparator());
-		sb.append("      </element>").append(System.lineSeparator());
-		sb.append("      <element id=\"module-output\" name=\"").append(projectName).append("\" />").append(System.lineSeparator());
-		sb.append("    </root>").append(System.lineSeparator());
-		sb.append("  </artifact>").append(System.lineSeparator());
+			sb.append("        <element id=\"file-copy\" path=\"$PROJECT_DIR$/META-INF/MANIFEST.MF\" />").append(nl);
+		sb.append("      </element>").append(nl);
+		sb.append("      <element id=\"module-output\" name=\"").append(projectName).append("\" />").append(nl);
+		sb.append("    </root>").append(nl);
+		sb.append("  </artifact>").append(nl);
 		sb.append("</component>");
 
 		return sb.toString();
 	}
 
-	public static String buildKemRunConfig(String projectName, String midletName, String className) {
+	public static String buildKemRunConfig(String moduleName, String midletName, String className, boolean eclipseManifest) {
+		String manifestPath = eclipseManifest ? "Application Descriptor" : "META-INF/MANIFEST.MF";
 		return "<component name=\"ProjectRunConfigurationManager\">\n" +
-				"  <configuration default=\"false\" name=\"Run &quot;" + midletName.replace("&", "&amp;").replace("\"", "&quot;") + "&quot; with KEmulator\" type=\"Application\" factoryName=\"Application\">\n" +
+				"  <configuration default=\"false\" name=\"Launch &quot;" + midletName.replace("&", "&amp;").replace("\"", "&quot;") + "&quot; with KEmulator\" type=\"Application\" factoryName=\"Application\">\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH\" value=\"1.8 CLDC Runtime\" />\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\" />\n" +
 				"    <option name=\"MAIN_CLASS_NAME\" value=\"emulator.Emulator\" />\n" +
-				"    <module name=\"" + projectName + "\" />\n" +
-				"    <option name=\"PROGRAM_PARAMETERS\" value=\"-cp $PROJECT_DIR$/bin/production/" + projectName + " -midlet " + className + " -jad $PROJECT_DIR$/META-INF/MANIFEST.MF -uei\" />\n" +
-				"    <option name=\"VM_PARAMETERS\" value=\"-XX:+IgnoreUnrecognizedVMOptions -Djna.nosys=true -Dfile.encoding=UTF-8 -XstartOnFirstThread\" />" +
+				"    <module name=\"" + moduleName + "\" />\n" +
+				"    <option name=\"PROGRAM_PARAMETERS\" value=\"-cp &quot;$OutputPath$&quot; -midlet &quot;" + className + "&quot; -jad &quot;$PROJECT_DIR$/" + manifestPath + "&quot; -uei\" />\n" +
+				"    <option name=\"VM_PARAMETERS\" value=\"-XX:+IgnoreUnrecognizedVMOptions -Djna.nosys=true -Dfile.encoding=UTF-8 -XstartOnFirstThread\" />\n" +
 				"    <option name=\"WORKING_DIRECTORY\" value=\"" + Emulator.getAbsolutePath() + "\" />\n" +
 				"    <method v=\"2\">\n" +
 				"      <option name=\"Make\" enabled=\"true\" />\n" +
@@ -256,14 +250,14 @@ public class ProjectConfigGenerator {
 				"</component>";
 	}
 
-	public static String buildRestoreRunConfig(String projectName) {
+	public static String buildRestoreRunConfig(String moduleName) {
 		return "<component name=\"ProjectRunConfigurationManager\">\n" +
 				"  <configuration default=\"false\" name=\"Restore project\" type=\"Application\" factoryName=\"Application\">\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH\" value=\"1.8 CLDC Runtime\" />\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\" />\n" +
 				"    <option name=\"MAIN_CLASS_NAME\" value=\"emulator.Emulator\" />\n" +
-				"    <module name=\"" + projectName + "\" />\n" +
-				"    <option name=\"PROGRAM_PARAMETERS\" value=\"-restore $PROJECT_DIR$\" />\n" +
+				"    <module name=\"" + moduleName + "\" />\n" +
+				"    <option name=\"PROGRAM_PARAMETERS\" value=\"-restore &quot;$PROJECT_DIR$&quot;\" />\n" +
 				"    <option name=\"WORKING_DIRECTORY\" value=\"" + Emulator.getAbsolutePath() + "\" />\n" +
 				"    <method v=\"2\">\n" +
 				"      <option name=\"Make\" enabled=\"true\" />\n" +
@@ -272,18 +266,37 @@ public class ProjectConfigGenerator {
 				"</component>";
 	}
 
-	public static String buildPackageRunConfig(String projectName) {
+	public static String buildPackageRunConfig(String artifactName, ArrayList<String> inJars, String outJar, boolean debugBuild) {
+		StringBuilder proguardCmdline = new StringBuilder();
+		// libraries/target config
+		proguardCmdline.append('@');
+		proguardCmdline.append(ProjectGenerator.PROGUARD_LOCAL_CFG);
+		// inputs
+		for (String jar : inJars) {
+			proguardCmdline.append(" -injars &quot;");
+			proguardCmdline.append(jar);
+			proguardCmdline.append("&quot;");
+		}
+		proguardCmdline.append(" -outjars &quot;");
+		proguardCmdline.append(outJar);
+		proguardCmdline.append("&quot;");
+		// optimization/obfuscation
+		if (debugBuild)
+			proguardCmdline.append(" -dontoptimize -dontshrink -dontobfuscate -keep class *");
+		else {
+			proguardCmdline.append(" @");
+			proguardCmdline.append(ProjectGenerator.PROGUARD_GLOBAL_CFG);
+		}
 		return "<component name=\"ProjectRunConfigurationManager\">\n" +
-				"  <configuration default=\"false\" name=\"Package\" type=\"JarApplication\">\n" +
+				"  <configuration default=\"false\" name=\"Package &quot;" + artifactName + "&quot; (" + (debugBuild ? "development" : "release") + ")\" type=\"JarApplication\">\n" +
 				"    <option name=\"JAR_PATH\" value=\"" + Settings.proguardPath + "\" />\n" +
-				"    <option name=\"PROGRAM_PARAMETERS\" value=\"@" + ProjectGenerator.PROGUARD_LOCAL_CFG + " @" + ProjectGenerator.PROGUARD_GLOBAL_CFG + "\" />\n" +
+				"    <option name=\"PROGRAM_PARAMETERS\" value=\"" + proguardCmdline + "\" />\n" +
 				"    <option name=\"WORKING_DIRECTORY\" value=\"$PROJECT_DIR$\" />\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH_ENABLED\" value=\"true\" />\n" +
 				"    <option name=\"ALTERNATIVE_JRE_PATH\" value=\"1.8 CLDC Runtime\" />\n" +
 				"    <method v=\"2\">\n" +
-				"      <option name=\"RunConfigurationTask\" enabled=\"true\" run_configuration_name=\"Restore project\" run_configuration_type=\"Application\" />" +
 				"      <option name=\"BuildArtifacts\" enabled=\"true\">\n" +
-				"        <artifact name=\"" + projectName + "\" />\n" +
+				"        <artifact name=\"" + artifactName + "\" />\n" +
 				"      </option>\n" +
 				"    </method>\n" +
 				"  </configuration>\n" +
@@ -304,6 +317,14 @@ public class ProjectConfigGenerator {
 		component.setAttribute("LANGUAGE_LEVEL", "JDK_1_3");
 		component.setAttribute("inherit-compiler-output", "true");
 		module.appendChild(component);
+
+		Element output = doc.createElement("output");
+		output.setAttribute("url", "file://$MODULE_DIR$/bin");
+		component.appendChild(output);
+
+		Element outputTest = doc.createElement("output-test");
+		outputTest.setAttribute("url", "file://$MODULE_DIR$/bin");
+		component.appendChild(outputTest);
 
 		component.appendChild(doc.createElement("exclude-output"));
 

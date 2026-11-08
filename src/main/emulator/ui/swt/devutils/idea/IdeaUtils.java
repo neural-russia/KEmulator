@@ -1,3 +1,6 @@
+/*
+Copyright (c) 2025 Fyodor Ryzhov
+*/
 package emulator.ui.swt.devutils.idea;
 
 import emulator.Emulator;
@@ -141,9 +144,11 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 			Settings.ideaJdkTablePatched = false;
 			if (Utils.linux)
 				new IdeaSetupXdgLinux(p).open();
-			else
+			else if (Utils.win)
 				new IdeaSetupWindows(p).open();
-			// TODO macos? headless linux?
+			else if (Utils.macos)
+				new IdeaSetupDarwin(p).open();
+			// TODO headless linux?
 		}
 	}
 
@@ -186,35 +191,36 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 		return true;
 	}
 
-	private static String validateInput(String repoName, String className, String appName, String location) {
+	private static ValidationResult validateInput(String repoName, String className, String appName, String location) {
 		if (repoName.isEmpty()) {
-			return "Project name must not be empty.";
+			return new ValidationResult("Project name must not be empty.", false, true);
 		}
 		if (!isValidRepoName(repoName)) {
-			return "Project name must meet certain restrictions, check tooltip on the field.";
-		}
-		if (className.isEmpty()) {
-			return "Class name must not be empty.";
-		}
-		if (!JavaTypeValidator.isValidJavaTypeName(className)) {
-			return "Class name must be a valid Java class name.";
-		}
-		if (appName.isEmpty()) {
-			return "MIDlet name must not be empty.";
-		}
-		if (appName.indexOf(',') != -1) {
-			return "MIDlet name must not contain commas.";
+			return new ValidationResult("Project name must meet certain restrictions, check tooltip on the field.", false, true);
 		}
 		if (location.isEmpty() || ".".equals(location)) {
-			return "Specify location for the project";
+			return new ValidationResult("Specify location for the project", false, true);
 		}
 		if (!Files.exists(Paths.get(location))) {
-			return "Location for project doesn't exist.";
+			return new ValidationResult("Location for project doesn't exist.", false, true);
 		}
 		if (Files.exists(Paths.get(location, repoName))) {
-			return "Folder with the specified name already exists. Do something with it.";
+			return new ValidationResult("The folder already exists. Project files will be overwritten.", true, false);
 		}
-		return null;
+		if (className.isEmpty()) {
+			return new ValidationResult("Class name must not be empty.", false, true);
+		}
+		if (!JavaTypeValidator.isValidJavaTypeName(className)) {
+			return new ValidationResult("Class name must be a valid Java class name.", false, true);
+		}
+		if (appName.isEmpty()) {
+			return new ValidationResult("MIDlet name must not be empty.", false, true);
+		}
+		if (appName.indexOf(',') != -1) {
+			return new ValidationResult("MIDlet name must not contain commas.", false, true);
+		}
+
+		return new ValidationResult("Code will be placed at " + Paths.get(location, repoName, "src"), true, true);
 	}
 
 	//#endregion
@@ -230,11 +236,11 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 
 		if (location.endsWith("/") || location.endsWith("\\")) location = location.substring(0, location.length() - 1);
 
-		String validation = validateInput(repoName, className, appName, location);
-		if (validation != null) creationStatus.setText(validation);
-		else creationStatus.setText("Code will be placed at " + Paths.get(location, repoName, "src"));
-
-		createProject.setEnabled(true);
+		ValidationResult validation = validateInput(repoName, className, appName, location);
+		creationStatus.setText(validation.message);
+		createProject.setEnabled(validation.allowCreation);
+		midletClassName.setEnabled(validation.generateCode);
+		midletName.setEnabled(validation.generateCode);
 		createNewProject.layout(true, true);
 	}
 
@@ -275,15 +281,19 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 
 		if (location.endsWith("/") || location.endsWith("\\")) location = location.substring(0, location.length() - 1);
 
-		String validation = validateInput(repoName, className, appName, location);
-		if (validation != null) {
-			errorMsg("Project creation", validation);
+		ValidationResult validation = validateInput(repoName, className, appName, location);
+		if (!validation.allowCreation) {
+			errorMsg("Project creation", validation.message);
 			return;
 		}
 		try {
-			String code = ProjectGenerator.create(location, repoName, className, appName);
+			//null is passed to block code generation
+			String code = ProjectGenerator.create(location, repoName, validation.generateCode ? className : null, appName);
 			Settings.lastIdeaRepoPath = location;
-			Runtime.getRuntime().exec(new String[]{Settings.ideaPath, Paths.get(location, repoName).toString(), code});
+			if (code == null)
+				Runtime.getRuntime().exec(new String[]{Settings.ideaPath, Paths.get(location, repoName).toString()});
+			else
+				Runtime.getRuntime().exec(new String[]{Settings.ideaPath, Paths.get(location, repoName).toString(), code});
 			shell.close();
 			shell.dispose();
 		} catch (Exception ex) {
@@ -322,7 +332,8 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 		String path = fd.open();
 		if (path == null) return;
 		try {
-			String dir = ProjectGenerator.convertEclipse(path);
+			ProjectGenerator.convertEclipse(path);
+			String dir = Paths.get(path).getParent().toAbsolutePath().toString();
 			Runtime.getRuntime().exec(new String[]{Settings.ideaPath, dir});
 			shell.close();
 			shell.dispose();
@@ -380,30 +391,46 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 
 			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
 
+			System.out.println();
 			System.out.println("\033[92mPlease enter project name.\033[0m");
 			System.out.println("Name of folder, JAR file, various configurations. Only ASCII letters, numbers, hyphen and underscore allowed.");
 			System.out.print("> ");
 			String name = br.readLine();
 
+			System.out.println();
 			System.out.println("\033[92mPlease enter MIDlet class name.\033[0m");
 			System.out.println("Full name of your MIDlet class. Must be valid java type name.");
 			System.out.print("> ");
 			String className = br.readLine();
 
+			System.out.println();
 			System.out.println("\033[92mPlease enter MIDlet name.\033[0m");
 			System.out.println("Name of your MIDlet, shown to user. Can contain any symbols except commas, just make sure your target device has enough fonts to display the name.");
 			System.out.print("> ");
 			String midletName = br.readLine();
 
-			String validation = validateInput(name, className, midletName, path);
-			if (validation != null) {
+			ValidationResult validation = validateInput(name, className, midletName, path);
+			if (!validation.allowCreation) {
 				System.out.println(validation);
+				System.exit(1);
+			}
+			if (!validation.generateCode) {
+				System.out.println("Folder already exists. Nothing was done.");
 				System.exit(1);
 			}
 
 			ProjectGenerator.create(path, name, className, midletName);
 			Settings.lastIdeaRepoPath = path;
-			System.out.println("OK");
+
+			System.out.println();
+			System.out.println("\033[92mDone. Do you want to edit this new project?\033[0m (y/N)");
+
+			String editConfirm = br.readLine();
+
+			if (!editConfirm.isEmpty() && editConfirm.toLowerCase().charAt(0) == 'y') {
+				editProjectCLI(path + File.separator + name);
+			}
+
 			System.exit(0);
 		} catch (Exception ex) {
 			System.out.println("Failed!");
@@ -439,4 +466,16 @@ public class IdeaUtils implements SelectionListener, ModifyListener {
 	}
 
 	//#endregion
+
+	private static class ValidationResult {
+		public String message;
+		public boolean allowCreation;
+		public boolean generateCode;
+
+		public ValidationResult(String message, boolean allowCreation, boolean generateCode) {
+			this.message = message;
+			this.allowCreation = allowCreation;
+			this.generateCode = generateCode;
+		}
+	}
 }

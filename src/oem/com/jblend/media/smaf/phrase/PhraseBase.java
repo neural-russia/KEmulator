@@ -21,7 +21,9 @@ import emulator.custom.ResourceManager;
 import java.io.IOException;
 
 abstract class PhraseBase {
+	byte[] data;
 	public PhraseBase(byte[] data) {
+		this.data = data;
 	}
 
 	public PhraseBase(String url) throws IOException {
@@ -29,10 +31,10 @@ abstract class PhraseBase {
 	}
 
 	public int getSize() {
-		return 0;
+		return data == null ? 0 : data.length;
 	}
 
 	public int getUseTracks() {
-		return 0;
+		return 1;
 	}
 }

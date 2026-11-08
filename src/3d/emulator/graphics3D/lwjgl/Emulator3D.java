@@ -1,5 +1,6 @@
 package emulator.graphics3D.lwjgl;
 
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.Settings;
 import emulator.Utils;
@@ -21,6 +22,7 @@ import org.eclipse.swt.graphics.ImageData;
 import org.eclipse.swt.graphics.PaletteData;
 import org.eclipse.swt.widgets.Canvas;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 import org.lwjgl.BufferUtils;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.opengl.*;
@@ -53,7 +55,27 @@ public final class Emulator3D implements IGraphics3D {
 	private int hints;
 	private static int targetWidth;
 	private static int targetHeight;
+	/**
+	 * Size of the underlying GL drawable (glCanvas / glfw window).
+	 * <p>
+	 * This is deliberately decoupled from the target size and only ever grows.
+	 * A render target is always placed in the <b>bottom-left</b> corner of the
+	 * drawable, which is also GL's own origin, so the existing
+	 * {@code targetHeight - y - h} viewport math stays correct no matter how
+	 * much larger the drawable is.
+	 * <p>
+	 * Shrinking the drawable for every small render-to-texture target (portal
+	 * views and similar) used to resize the window several times per frame.
+	 * The resize is applied by another thread, while glViewport/glScissor/
+	 * glReadPixels use the new size immediately, so the two could disagree
+	 * within a single frame - visible as jitter and torn frames.
+	 */
+	private static int drawableWidth;
+	private static int drawableHeight;
 	private static ByteBuffer buffer;
+	/** Scratch buffers for the Image2D readback, reused between frames. */
+	private static byte[] readbackRGBA;
+	private static byte[] readbackRGB;
 	private static BufferedImage awtBufferImage;
 	private static ImageData swtBufferImage;
 	public static final PaletteData swtPalleteData = new PaletteData(-16777216, 16711680, '\uff00');
@@ -91,6 +113,7 @@ public final class Emulator3D implements IGraphics3D {
 	private static boolean threadBound;
 	private ExecutorService executorService;
 	private Thread executorThread;
+	private boolean useM3gThread;
 
 	private Emulator3D() {
 		instance = this;
@@ -108,8 +131,10 @@ public final class Emulator3D implements IGraphics3D {
 		properties.put("maxSpriteCropDimension", new Integer(MaxSpriteCropDimension));
 		properties.put("maxTransformsPerVertex", new Integer(MaxTransformsPerVertex));
 		properties.put("numTextureUnits", new Integer(NumTextureUnits));
-		properties.put("coreID", "@KEmulator LWJ-OpenGL-M3G @liang.wu");
-		properties.put("version", "nnmod " + Emulator.version + (Emulator.revision.length() > 0 ? " (git: " + Emulator.revision + ")" : ""));
+		if (!Settings.hideEmulation) {
+			properties.put("coreID", "@KEmulator LWJ-OpenGL-M3G @liang.wu");
+			properties.put("version", "nnmod " + Emulator.version + (Emulator.revision.length() != 0 ? " (git: " + Emulator.revision + ")" : ""));
+		}
 
 		memoryBuffers = new LWJGLUtil();
 		renderPipe = new RenderPipe();
@@ -125,6 +150,7 @@ public final class Emulator3D implements IGraphics3D {
 
 	public void start() {
 		if (executorService != null) return;
+		useM3gThread = AppSettings.m3gThread;
 		executorService = Executors.newSingleThreadExecutor((r) -> {
 			Thread t = new Thread(r, "KEmulator-M3G");
 			t.setPriority(5);
@@ -167,7 +193,7 @@ public final class Emulator3D implements IGraphics3D {
 
 		start();
 
-		if (!threadBound || !Settings.m3gThread) {
+		if (!threadBound || !useM3gThread) {
 			threadBound = true;
 			sync(() -> {
 				try {
@@ -180,14 +206,6 @@ public final class Emulator3D implements IGraphics3D {
 
 		try {
 			if (targetWidth != w || targetHeight != h) {
-				if (glCanvas != null) {
-					glCanvas.getDisplay().asyncExec(() -> {
-						glCanvas.setSize(w, h);
-						glCanvas.setVisible(false);
-					});
-				} else {
-					async(() -> glfwSetWindowSize(window, w, h));
-				}
 				if (Settings.g2d == 1) {
 					awtBufferImage = new BufferedImage(w, h, 4);
 				} else {
@@ -198,11 +216,39 @@ public final class Emulator3D implements IGraphics3D {
 				targetHeight = h;
 			}
 
+			// The drawable only ever grows; a smaller target is rendered into its
+			// bottom-left corner instead of shrinking the window. In practice the
+			// full-screen frame is bound every frame, so after the first frame no
+			// render-to-texture target can trigger a resize at all.
+			//
+			// NOTE: this must stay asynchronous. bindTarget() is synchronized, and
+			// the SWT thread can call into it while painting; blocking here on the
+			// SWT thread (syncExec) while holding the monitor deadlocks the M3G
+			// thread against the UI thread.
+			if (drawableWidth < w || drawableHeight < h) {
+				final int dw = drawableWidth = Math.max(drawableWidth, w);
+				final int dh = drawableHeight = Math.max(drawableHeight, h);
+				if (glCanvas != null) {
+					if (glCanvas.getDisplay() == Display.getCurrent()) {
+						glCanvas.setSize(dw, dh);
+						glCanvas.setVisible(false);
+					} else {
+						glCanvas.getDisplay().asyncExec(() -> {
+							if (glCanvas == null || glCanvas.isDisposed()) return;
+							glCanvas.setSize(dw, dh);
+							glCanvas.setVisible(false);
+						});
+					}
+				} else {
+					async(() -> glfwSetWindowSize(window, dw, dh));
+				}
+			}
+
 			async(() -> {
 				GL11.glEnable(GL_SCISSOR_TEST);
 				GL11.glEnable(GL_NORMALIZE);
 				GL11.glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-				if (Settings.m3gFlushImmediately)
+				if (AppSettings.m3gFlushImmediately)
 					swapBuffers();
 			});
 		} catch (Exception e) {
@@ -237,7 +283,7 @@ public final class Emulator3D implements IGraphics3D {
 		if (!egl) {
 			sync(() -> {
 				GL11.glFinish();
-				if (!Settings.m3gFlushImmediately)
+				if (!AppSettings.m3gFlushImmediately)
 					swapBuffers();
 
 				while (!unusedGLTextures.isEmpty())
@@ -246,12 +292,11 @@ public final class Emulator3D implements IGraphics3D {
 				if (exiting) {
 					while (!usedGLTextures.isEmpty())
 						releaseTexture(usedGLTextures.get(0));
-					return;
 				}
 			});
 		}
 
-		if (!Settings.m3gThread) {
+		if (!useM3gThread) {
 			releaseContext();
 		}
 
@@ -290,75 +335,95 @@ public final class Emulator3D implements IGraphics3D {
 
 			if (this.target != null) {
 				if (this.target instanceof Image2D) {
-					Image2D var9 = (Image2D) this.target;
-					buffer.rewind();
-					GL11.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-					byte[] var11 = new byte[width * height * 4];
-					int w = width << 2;
-					int off = var11.length - w;
+					Image2D targetImage = (Image2D) this.target;
+					// Read back only as much as the target actually holds. The
+					// drawable may be larger than the target, and GL reads from
+					// its bottom-left corner, which is exactly where we render.
+					int rw = Math.min(width, targetImage.getWidth());
+					int rh = Math.min(height, targetImage.getHeight());
 
-					for (int i = height; i > 0; --i) {
-						buffer.get(var11, off, w);
+					buffer.rewind();
+					GL11.glReadPixels(x, y, rw, rh, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+					int w = rw << 2;
+					int rgbaLen = w * rh;
+					if (readbackRGBA == null || readbackRGBA.length < rgbaLen)
+						readbackRGBA = new byte[rgbaLen];
+					byte[] rgba = readbackRGBA;
+					// GL returns bottom-up rows, Image2D expects top-down
+					int off = rgbaLen - w;
+
+					for (int i = rh; i > 0; --i) {
+						buffer.get(rgba, off, w);
 						off -= w;
 					}
 
-					if (var9.getFormat() == 100) {
-						var9.set(x, y, var9.getWidth(), var9.getHeight(), var11);
+					if (targetImage.getFormat() == Image2D.RGBA) {
+						targetImage.set(0, 0, rw, rh, rgba);
 					} else {
-						byte[] data = new byte[var9.getWidth() * var9.getHeight() * 3];
-						int var6 = var11.length - 1;
+						int rgbLen = rw * rh * 3;
+						if (readbackRGB == null || readbackRGB.length < rgbLen)
+							readbackRGB = new byte[rgbLen];
+						byte[] data = readbackRGB;
 
-						for (int var7 = data.length - 1; var7 >= 0; data[var7--] = var11[var6--]) {
-							--var6;
-							data[var7--] = var11[var6--];
-							data[var7--] = var11[var6--];
+						for (int s = 0, d = 0; d < rgbLen; s += 4) {
+							data[d++] = rgba[s];
+							data[d++] = rgba[s + 1];
+							data[d++] = rgba[s + 2];
 						}
 
-						var9.set(x, y, var9.getWidth(), var9.getHeight(), data);
+						targetImage.set(0, 0, rw, rh, data);
 					}
-				} else if (Settings.g2d == 0) {
-					buffer.rewind();
-					GL11.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-
-					for (int yy = 0; yy < height; yy++) {
-						int yWrite = swtBufferImage.height - 1 - yy;
-						int writePos = yWrite * swtBufferImage.width * 4;
-						int readPos = yy * width * 4;
-
-						buffer.position(readPos);
-						buffer.get(swtBufferImage.data, writePos, width * 4);
-					}
-
-					Image var12 = new Image(null, swtBufferImage);
-					((Graphics2DSWT) ((Graphics) this.target).getImpl()).gc().drawImage(
-							var12,
-							0, 0, width, height,
-							x, y, width, height
-					);
-					var12.dispose();
 				} else {
-					buffer.rewind();
-					GL11.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
-					int[] data = ((DataBufferInt) awtBufferImage.getRaster().getDataBuffer()).getData();
-					IntBuffer ib = buffer.asIntBuffer();
+					Graphics target = (Graphics) this.target;
+					int tx = target.getTranslateX();
+					int ty = target.getTranslateY();
+					target.translate(-tx, -ty);
+					if (Settings.g2d == 0) {
+						buffer.rewind();
+						GL11.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 
-					for (int yy = 0; yy < height; yy++) {
-						int yWrite = yy;
-						if (!flip) yWrite = awtBufferImage.getHeight() - 1 - yWrite;
+						for (int yy = 0; yy < height; yy++) {
+							int yWrite = swtBufferImage.height - 1 - yy;
+							int writePos = yWrite * swtBufferImage.width * 4;
+							int readPos = yy * width * 4;
 
-						int writePos = yWrite * awtBufferImage.getWidth();
-						int readPos = yy * width;
+							buffer.position(readPos);
+							buffer.get(swtBufferImage.data, writePos, width * 4);
+						}
 
-						ib.position(readPos);
-						ib.get(data, writePos, width);
+						Image frameImage = new Image(null, swtBufferImage);
+						((Graphics2DSWT) (target.getImpl())).gc().drawImage(
+								frameImage,
+								0, 0, width, height,
+								x, y, width, height
+						);
+						frameImage.dispose();
+					} else {
+						buffer.rewind();
+						GL11.glReadPixels(x, y, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+						int[] data = ((DataBufferInt) awtBufferImage.getRaster().getDataBuffer()).getData();
+						IntBuffer ib = buffer.asIntBuffer();
+
+						for (int yy = 0; yy < height; yy++) {
+							int yWrite = yy;
+							if (!flip) yWrite = awtBufferImage.getHeight() - 1 - yWrite;
+
+							int writePos = yWrite * awtBufferImage.getWidth();
+							int readPos = yy * width;
+
+							ib.position(readPos);
+							ib.get(data, writePos, width);
+						}
+
+						((Graphics2DAWT) (target.getImpl())).g().drawImage(
+								awtBufferImage,
+								x, y, x + width, y + height,
+								0, 0, width, height,
+								null
+						);
 					}
-
-					((Graphics2DAWT) ((Graphics) this.target).getImpl()).g().drawImage(
-							awtBufferImage,
-							x, y, x + width, y + height,
-							0, 0, width, height,
-							null
-					);
+					target.translate(tx, ty);
 				}
 			}
 		});
@@ -383,8 +448,8 @@ public final class Emulator3D implements IGraphics3D {
 	private void setHintsInternal() {
 		boolean aa = (hints & Graphics3D.ANTIALIAS) != 0;
 
-		if (Settings.m3gAA == Settings.AA_OFF) aa = false;
-		else if (Settings.m3gAA == Settings.AA_ON) aa = true;
+		if (AppSettings.m3gAA == AppSettings.AA_OFF) aa = false;
+		else if (AppSettings.m3gAA == AppSettings.AA_ON) aa = true;
 
 		if (aa) {
 			GL11.glEnable(GL_POINT_SMOOTH);
@@ -449,7 +514,7 @@ public final class Emulator3D implements IGraphics3D {
 			GL11.glDepthMask(true);
 			GL11.glColorMask(true, true, true, true);
 
-			int bgColor = bg != null && !Settings.xrayView ? bg.getColor() : 0;
+			int bgColor = bg != null && !AppSettings.xrayView ? bg.getColor() : 0;
 			GL11.glClearColor(
 					G3DUtils.getFloatColor(bgColor, 16),
 					G3DUtils.getFloatColor(bgColor, 8),
@@ -457,7 +522,7 @@ public final class Emulator3D implements IGraphics3D {
 					G3DUtils.getFloatColor(bgColor, 24)
 			);
 
-			if (bg != null && !Settings.xrayView) {
+			if (bg != null && !AppSettings.xrayView) {
 				int colorClear = bg.isColorClearEnabled() ? GL_COLOR_BUFFER_BIT : 0;
 				int depthClear = depthBufferEnabled && bg.isDepthClearEnabled() ? GL_DEPTH_BUFFER_BIT : 0;
 				GL11.glClear(colorClear | depthClear);
@@ -466,7 +531,7 @@ public final class Emulator3D implements IGraphics3D {
 			} else {
 				GL11.glClear(GL_COLOR_BUFFER_BIT | (depthBufferEnabled ? GL_DEPTH_BUFFER_BIT : 0));
 			}
-			if (Settings.m3gFlushImmediately)
+			if (AppSettings.m3gFlushImmediately)
 				swapBuffers();
 		});
 	}
@@ -529,7 +594,7 @@ public final class Emulator3D implements IGraphics3D {
 		GL11.glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
 
 		GL11.glPixelZoom(imgScaleX, -imgScaleY);
-		ByteBuffer imgBuffer = memoryBuffers.getImageBuffer(bg.getImage().getImageData());
+		ByteBuffer imgBuffer = memoryBuffers.getImageBuffer(bg.getImage()._getImageData());
 //		ByteBuffer imgBuffer = bg.getImage().getBuffer();
 
 		for (int y = 0; y < repeatsY; y++) {
@@ -568,10 +633,12 @@ public final class Emulator3D implements IGraphics3D {
 			GL11.glDisable(GL_LIGHT0 + i);
 		}
 
+		GL11.glLightModelfv(GL_LIGHT_MODEL_AMBIENT, memoryBuffers.getFloatBuffer(new float[] {0, 0, 0, 1}));
+
 		if (!useGL11() && capabilities.GL_ARB_color_buffer_float) {
 			ARBColorBufferFloat.glClampColorARB(
 					ARBColorBufferFloat.GL_CLAMP_VERTEX_COLOR_ARB,
-					Settings.m3gDisableLightClamp ? GL_FALSE : GL_TRUE
+					AppSettings.m3gDisableLightClamp ? GL_FALSE : GL_TRUE
 			);
 		}
 
@@ -694,28 +761,29 @@ public final class Emulator3D implements IGraphics3D {
 		setupFog(ap.getFog());
 	}
 
-	private static void setupPolygonMode(PolygonMode pm) {
+	private void setupPolygonMode(PolygonMode pm) {
 		if (pm == null) {
 			pm = new PolygonMode();
 		}
 
-		GL11.glPolygonMode(GL_FRONT_AND_BACK, Settings.xrayView ? GL_LINE : GL_FILL);
+		GL11.glPolygonMode(GL_FRONT_AND_BACK, AppSettings.xrayView ? GL_LINE : GL_FILL);
 
-		int var1 = pm.getCulling();
-		if (var1 == PolygonMode.CULL_NONE) {
+		int culling = pm.getCulling();
+		if (culling == PolygonMode.CULL_NONE) {
 			GL11.glDisable(GL_CULL_FACE);
 		} else {
 			GL11.glEnable(GL_CULL_FACE);
-			GL11.glCullFace(var1 == PolygonMode.CULL_FRONT ? GL_FRONT : GL_BACK);
+			GL11.glCullFace(culling == PolygonMode.CULL_FRONT ? GL_FRONT : GL_BACK);
 		}
 
 		GL11.glShadeModel(pm.getShading() == PolygonMode.SHADE_FLAT ? GL_FLAT : GL_SMOOTH);
 		GL11.glFrontFace(pm.getWinding() == PolygonMode.WINDING_CW ? GL_CW : GL_CCW);
 		GL11.glLightModelf(GL_LIGHT_MODEL_TWO_SIDE, pm.isTwoSidedLightingEnabled() ? 1.0F : 0.0F);
 		GL11.glLightModelf(GL_LIGHT_MODEL_LOCAL_VIEWER, pm.isLocalCameraLightingEnabled() ? 1.0F : 0.0F);
+		GL11.glLightModelfv(GL_LIGHT_MODEL_AMBIENT, memoryBuffers.getFloatBuffer(new float[] {0, 0, 0, 1}));
 
 		boolean persCorrect = pm.isPerspectiveCorrectionEnabled();
-		if (Settings.m3gForcePerspectiveCorrection) persCorrect = true;
+		if (AppSettings.m3gForcePerspectiveCorrection) persCorrect = true;
 
 		GL11.glHint(GL_PERSPECTIVE_CORRECTION_HINT, persCorrect ? GL_NICEST : GL_FASTEST);
 	}
@@ -770,9 +838,9 @@ public final class Emulator3D implements IGraphics3D {
 
 		GL11.glPolygonOffset(cm.getDepthOffsetFactor(), cm.getDepthOffsetUnits());
 		if (cm.getDepthOffsetFactor() == 0.0F && cm.getDepthOffsetUnits() == 0.0F) {
-			GL11.glDisable(Settings.xrayView ? GL_POLYGON_OFFSET_LINE : GL_POLYGON_OFFSET_FILL);
+			GL11.glDisable(AppSettings.xrayView ? GL_POLYGON_OFFSET_LINE : GL_POLYGON_OFFSET_FILL);
 		} else {
-			GL11.glEnable(Settings.xrayView ? GL_POLYGON_OFFSET_LINE : GL_POLYGON_OFFSET_FILL);
+			GL11.glEnable(AppSettings.xrayView ? GL_POLYGON_OFFSET_LINE : GL_POLYGON_OFFSET_FILL);
 		}
 	}
 
@@ -808,7 +876,7 @@ public final class Emulator3D implements IGraphics3D {
 	}
 
 	private void setupFog(Fog fog) {
-		if (fog != null && !Settings.xrayView) {
+		if (fog != null && !AppSettings.xrayView) {
 			GL11.glEnable(GL_FOG);
 			GL11.glFogi(GL_FOG_MODE, fog.getMode() == Fog.LINEAR ? GL_LINEAR : GL_EXP);
 
@@ -878,7 +946,7 @@ public final class Emulator3D implements IGraphics3D {
 		TriangleStripArray triangleStripArray = (TriangleStripArray) indices;
 		int stripCount = triangleStripArray.getStripCount();
 
-		if (ap != null && !Settings.xrayView) {
+		if (ap != null && !AppSettings.xrayView) {
 
 			for (int i = 0; i < NumTextureUnits; ++i) {
 				Texture2D texture2D = ap.getTexture(i);
@@ -894,11 +962,11 @@ public final class Emulator3D implements IGraphics3D {
 					GL13.glClientActiveTexture(GL13.GL_TEXTURE0 + i);
 				}
 
-				int id = image2D.getId();
+				int id = image2D._getId();
 				if (id == 0) {
 					id = GL11.glGenTextures();
-					image2D.setId(id);
-					image2D.setLoaded(false);
+					image2D._setId(id);
+					image2D._setLoaded(false);
 					if (!usedGLTextures.contains(id))
 						usedGLTextures.add(id);
 					texturesTable.put(id, image2D);
@@ -935,8 +1003,8 @@ public final class Emulator3D implements IGraphics3D {
 				blendColor[3] = 1.0F;
 				GL11.glTexEnvfv(GL_TEXTURE_ENV, GL_TEXTURE_ENV_COLOR, memoryBuffers.getFloatBuffer(blendColor));
 
-				if (!image2D.isLoaded()) {
-					image2D.setLoaded(true);
+				if (!image2D._isLoaded()) {
+					image2D._setLoaded(true);
 
 					Profiler3D.LWJGL_glTexImage2DCount++;
 
@@ -964,7 +1032,7 @@ public final class Emulator3D implements IGraphics3D {
 					GL11.glTexImage2D(GL_TEXTURE_2D, 0,
 							texFormat, image2D.getWidth(), image2D.getHeight(), 0,
 							texFormat, GL_UNSIGNED_BYTE,
-							memoryBuffers.getImageBuffer(image2D.getImageData())
+							memoryBuffers.getImageBuffer(image2D._getImageData())
 //							image2D.getBuffer()
 					);
 				}
@@ -979,23 +1047,23 @@ public final class Emulator3D implements IGraphics3D {
 				int levelFilter = texture2D.getLevelFilter();
 				int imageFilter = texture2D.getImageFilter();
 
-				if (useGL11() || Settings.m3gMipmapping == Settings.MIP_OFF) {
+				if (useGL11() || AppSettings.m3gMipmapping == AppSettings.MIP_OFF) {
 					levelFilter = Texture2D.FILTER_BASE_LEVEL;
 					if (!useGL11()) glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
-				} else if (Settings.m3gMipmapping == Settings.MIP_LINEAR) {
+				} else if (AppSettings.m3gMipmapping == AppSettings.MIP_LINEAR) {
 					levelFilter = Texture2D.FILTER_NEAREST;
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
-				} else if (Settings.m3gMipmapping == Settings.MIP_TRILINEAR) {
+				} else if (AppSettings.m3gMipmapping == AppSettings.MIP_TRILINEAR) {
 					levelFilter = Texture2D.FILTER_LINEAR;
 					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 1);
-				} else if (Settings.m3gMipmapping >= Settings.MIP_ANISO_2) {
+				} else if (AppSettings.m3gMipmapping >= AppSettings.MIP_ANISO_2) {
 					levelFilter = Texture2D.FILTER_LINEAR;
-					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 2 << (Settings.m3gMipmapping - Settings.MIP_ANISO_2));
+					glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, 2 << (AppSettings.m3gMipmapping - AppSettings.MIP_ANISO_2));
 				}
 
-				if (Settings.m3gTexFilter == Settings.TEX_FILTER_NEAREST) {
+				if (AppSettings.m3gTexFilter == AppSettings.TEX_FILTER_NEAREST) {
 					imageFilter = Texture2D.FILTER_NEAREST;
-				} else if (Settings.m3gTexFilter == Settings.TEX_FILTER_LINEAR) {
+				} else if (AppSettings.m3gTexFilter == AppSettings.TEX_FILTER_LINEAR) {
 					imageFilter = Texture2D.FILTER_LINEAR;
 				}
 
@@ -1044,7 +1112,7 @@ public final class Emulator3D implements IGraphics3D {
 
 				Image2D image2D = tex.getImage();
 
-				if (image2D.getId() != 0) {
+				if (image2D._getId() != 0) {
 					if (!useGL11()) {
 						GL13.glActiveTexture(GL13.GL_TEXTURE0 + i);
 						GL13.glClientActiveTexture(GL13.GL_TEXTURE0 + i);
@@ -1110,177 +1178,177 @@ public final class Emulator3D implements IGraphics3D {
 
 		renderPipe.clear();
 		MeshMorph.getInstance().clearCache();
-		if (Settings.m3gFlushImmediately)
+		if (AppSettings.m3gFlushImmediately)
 			swapBuffers();
 	}
 
-	private void renderSprite(Sprite3D sprite, Transform var2, float alphaFactor) {
+	private void renderSprite(Sprite3D sprite, Transform transform, float alphaFactor) {
 		Profiler3D.LWJGL_renderSpriteCount++;
 
-		float[] var3 = new float[]{0.0F, 0.0F, 0.0F, 1.0F};
-		float[] var4 = new float[]{1.0F, 0.0F, 0.0F, 1.0F};
-		float[] var5 = new float[]{0.0F, 1.0F, 0.0F, 1.0F};
-		Transform var6;
-		(var6 = new Transform(CameraCache.invCam)).postMultiply(var2);
-		Transform3D impl = (Transform3D) var6.getImpl();
-		impl.transform(var3);
-		impl.transform(var4);
-		impl.transform(var5);
-		float[] var7 = new float[]{var3[0], var3[1], var3[2], var3[3]};
-		Vector4f.mul(var3, 1.0F / var3[3]);
-		Vector4f.mul(var4, 1.0F / var4[3]);
-		Vector4f.mul(var5, 1.0F / var5[3]);
-		Vector4f.sub(var4, var3);
-		Vector4f.sub(var5, var3);
-		float[] var8 = new float[]{Vector4f.length(var4), 0.0F, 0.0F, 0.0F};
-		float[] var9 = new float[]{0.0F, Vector4f.length(var5), 0.0F, 0.0F};
-		Vector4f.add(var8, var7);
-		Vector4f.add(var9, var7);
-		Transform var10 = new Transform();
-		CameraCache.camera.getProjection(var10);
-		impl = (Transform3D) var10.getImpl();
-		impl.transform(var7);
-		impl.transform(var8);
-		impl.transform(var9);
-		if (var7[3] > 0.0F && -var7[3] < var7[2] && var7[2] <= var7[3]) {
-			Vector4f.mul(var7, 1.0F / var7[3]);
-			Vector4f.mul(var8, 1.0F / var8[3]);
-			Vector4f.mul(var9, 1.0F / var9[3]);
-			Vector4f.sub(var8, var7);
-			Vector4f.sub(var9, var7);
-			boolean var11 = sprite.isScaled();
-			int[] var12;
-			boolean var13 = (var12 = new int[]{sprite.getCropX(), sprite.getCropY(), sprite.getCropWidth(), sprite.getCropHeight()})[2] < 0;
-			boolean var14 = var12[3] < 0;
-			var12[2] = Math.abs(var12[2]);
-			var12[3] = Math.abs(var12[3]);
-			float var15 = 1.0F;
-			float var16 = 1.0F;
-			float var17 = (float) ((var13 ? var12[2] : -var12[2]) / 2);
-			float var18 = (float) ((var14 ? -var12[3] : var12[3]) / 2);
-			float var19;
-			float var20;
-			if (!var11) {
-				if (var13) {
-					var15 = -1.0F;
+		float[] origin = new float[]{0.0F, 0.0F, 0.0F, 1.0F};
+		float[] unitX = new float[]{1.0F, 0.0F, 0.0F, 1.0F};
+		float[] unitY = new float[]{0.0F, 1.0F, 0.0F, 1.0F};
+		Transform modelView;
+		(modelView = new Transform(CameraCache.invCam)).postMultiply(transform);
+		Transform3D impl = (Transform3D) modelView.getImpl();
+		impl.transform(origin);
+		impl.transform(unitX);
+		impl.transform(unitY);
+		float[] center = new float[]{origin[0], origin[1], origin[2], origin[3]};
+		Vector4f.mul(origin, 1.0F / origin[3]);
+		Vector4f.mul(unitX, 1.0F / unitX[3]);
+		Vector4f.mul(unitY, 1.0F / unitY[3]);
+		Vector4f.sub(unitX, origin);
+		Vector4f.sub(unitY, origin);
+		float[] scaleX = new float[]{Vector4f.length(unitX), 0.0F, 0.0F, 0.0F};
+		float[] scaleY = new float[]{0.0F, Vector4f.length(unitY), 0.0F, 0.0F};
+		Vector4f.add(scaleX, center);
+		Vector4f.add(scaleY, center);
+		Transform projection = new Transform();
+		CameraCache.camera.getProjection(projection);
+		impl = (Transform3D) projection.getImpl();
+		impl.transform(center);
+		impl.transform(scaleX);
+		impl.transform(scaleY);
+		if (center[3] > 0.0F && -center[3] < center[2] && center[2] <= center[3]) {
+			Vector4f.mul(center, 1.0F / center[3]);
+			Vector4f.mul(scaleX, 1.0F / scaleX[3]);
+			Vector4f.mul(scaleY, 1.0F / scaleY[3]);
+			Vector4f.sub(scaleX, center);
+			Vector4f.sub(scaleY, center);
+			boolean scaled = sprite.isScaled();
+			int[] crop;
+			boolean flipX = (crop = new int[]{sprite.getCropX(), sprite.getCropY(), sprite.getCropWidth(), sprite.getCropHeight()})[2] < 0;
+			boolean flipY = crop[3] < 0;
+			crop[2] = Math.abs(crop[2]);
+			crop[3] = Math.abs(crop[3]);
+			float zoomX = 1.0F;
+			float zoomY = 1.0F;
+			float rasterOffsetX = (float) ((flipX ? crop[2] : -crop[2]) / 2);
+			float rasterOffsetY = (float) ((flipY ? -crop[3] : crop[3]) / 2);
+			float spriteWidth;
+			float spriteHeight;
+			if (!scaled) {
+				if (flipX) {
+					zoomX = -1.0F;
 				}
 
-				if (var14) {
-					var16 = -1.0F;
+				if (flipY) {
+					zoomY = -1.0F;
 				}
 
-				var19 = (float) var12[2];
-				var20 = (float) var12[3];
+				spriteWidth = (float) crop[2];
+				spriteHeight = (float) crop[3];
 			} else {
-				var15 = Vector4f.length(var8) * (float) this.viewportWidth * 0.5F;
-				var16 = Vector4f.length(var9) * (float) this.viewportHeight * 0.5F;
-				var19 = var15;
-				var20 = var16;
-				var17 = -var15 / 2.0F;
-				var18 = var16 / 2.0F;
-				if (var13) {
-					var17 += var15;
+				zoomX = Vector4f.length(scaleX) * (float) this.viewportWidth * 0.5F;
+				zoomY = Vector4f.length(scaleY) * (float) this.viewportHeight * 0.5F;
+				spriteWidth = zoomX;
+				spriteHeight = zoomY;
+				rasterOffsetX = -zoomX / 2.0F;
+				rasterOffsetY = zoomY / 2.0F;
+				if (flipX) {
+					rasterOffsetX += zoomX;
 				}
 
-				if (var14) {
-					var18 -= var16;
+				if (flipY) {
+					rasterOffsetY -= zoomY;
 				}
 
-				var15 /= var13 ? -((float) var12[2]) : (float) var12[2];
-				var16 /= var14 ? -((float) var12[3]) : (float) var12[3];
+				zoomX /= flipX ? -((float) crop[2]) : (float) crop[2];
+				zoomY /= flipY ? -((float) crop[3]) : (float) crop[3];
 			}
 
-			int[] var21 = new int[4];
-			if (G3DUtils.intersectRectangle(var12[0], var12[1], var12[2], var12[3], 0, 0, sprite.getImage().getWidth(), sprite.getImage().getHeight(), var21)) {
-				float var10000;
+			int[] clippedCrop = new int[4];
+			if (G3DUtils.intersectRectangle(crop[0], crop[1], crop[2], crop[3], 0, 0, sprite.getImage().getWidth(), sprite.getImage().getHeight(), clippedCrop)) {
+				float rasterOffset;
 				label96:
 				{
-					if (!var13) {
-						var10000 = var17 - var15 * (float) (var12[0] - var21[0]);
+					if (!flipX) {
+						rasterOffset = rasterOffsetX - zoomX * (float) (crop[0] - clippedCrop[0]);
 					} else {
-						if (var12[0] <= 0) {
+						if (crop[0] <= 0) {
 							break label96;
 						}
 
-						var10000 = var17 + var15 * (float) (var12[0] - var21[0]);
+						rasterOffset = rasterOffsetX + zoomX * (float) (crop[0] - clippedCrop[0]);
 					}
 
-					var17 = var10000;
+					rasterOffsetX = rasterOffset;
 				}
 
 				label90:
 				{
-					if (!var14) {
-						var10000 = var18 + var16 * (float) (var12[1] - var21[1]);
+					if (!flipY) {
+						rasterOffset = rasterOffsetY + zoomY * (float) (crop[1] - clippedCrop[1]);
 					} else {
-						if (var12[1] <= 0) {
+						if (crop[1] <= 0) {
 							break label90;
 						}
 
-						var10000 = var18 - var16 * (float) (var12[1] - var21[1]);
+						rasterOffset = rasterOffsetY - zoomY * (float) (crop[1] - clippedCrop[1]);
 					}
 
-					var18 = var10000;
+					rasterOffsetY = rasterOffset;
 				}
 
-				ByteBuffer var27;
-				short var28;
+				ByteBuffer pixels;
+				short pixelFormat;
 				label84:
 				{
-					Transform var22;
-					(var22 = new Transform()).postScale((float) this.viewportWidth / ((float) this.viewportWidth + var19), (float) this.viewportHeight / ((float) this.viewportHeight + var20), 1.0F);
-					var22.postMultiply(var10);
-					var10.set(var22);
-					int var23 = (int) ((float) this.viewportX - var19 / 2.0F);
-					int var24 = (int) ((float) this.viewportY - var20 / 2.0F);
-					int var25 = (int) ((float) this.viewportWidth + var19);
-					int var26 = (int) ((float) this.viewportHeight + var20);
-					var10.transpose();
-					var6.transpose();
-					GL11.glViewport(var23, targetHeight - var24 - var26, var25, var26);
+					Transform viewportScale;
+					(viewportScale = new Transform()).postScale((float) this.viewportWidth / ((float) this.viewportWidth + spriteWidth), (float) this.viewportHeight / ((float) this.viewportHeight + spriteHeight), 1.0F);
+					viewportScale.postMultiply(projection);
+					projection.set(viewportScale);
+					int extendedX = (int) ((float) this.viewportX - spriteWidth / 2.0F);
+					int extendedY = (int) ((float) this.viewportY - spriteHeight / 2.0F);
+					int extendedWidth = (int) ((float) this.viewportWidth + spriteWidth);
+					int extendedHeight = (int) ((float) this.viewportHeight + spriteHeight);
+					projection.transpose();
+					modelView.transpose();
+					GL11.glViewport(extendedX, targetHeight - extendedY - extendedHeight, extendedWidth, extendedHeight);
 					GL11.glMatrixMode(5889);
-					GL11.glLoadMatrixf(memoryBuffers.getFloatBuffer(((Transform3D) var10.getImpl()).m_matrix));
+					GL11.glLoadMatrixf(memoryBuffers.getFloatBuffer(((Transform3D) projection.getImpl()).m_matrix));
 					GL11.glMatrixMode(5888);
-					GL11.glLoadMatrixf(memoryBuffers.getFloatBuffer(((Transform3D) var6.getImpl()).m_matrix));
+					GL11.glLoadMatrixf(memoryBuffers.getFloatBuffer(((Transform3D) modelView.getImpl()).m_matrix));
 					GL11.glDisable(2896);
-//					var27 = sprite.getImage().getBuffer();
-					var27 = memoryBuffers.getImageBuffer(sprite.getImage().getImageData());
+//					pixels = sprite.getImage().getBuffer();
+					pixels = memoryBuffers.getImageBuffer(sprite.getImage()._getImageData());
 					GL11.glRasterPos4f(0.0F, 0.0F, 0.0F, 1.0F);
 					GL11.glPixelStorei(3314, sprite.getImage().getWidth());
-					GL11.glPixelStorei(3315, var21[1]);
-					GL11.glPixelStorei(3316, var21[0]);
-					GL11.glBitmap(0, 0, 0.0F, 0.0F, var17, var18, var27);
-					GL11.glPixelZoom(var15, -var16);
-					var28 = 6407;
-					short var29;
+					GL11.glPixelStorei(3315, clippedCrop[1]);
+					GL11.glPixelStorei(3316, clippedCrop[0]);
+					GL11.glBitmap(0, 0, 0.0F, 0.0F, rasterOffsetX, rasterOffsetY, pixels);
+					GL11.glPixelZoom(zoomX, -zoomY);
+					pixelFormat = 6407;
+					short format;
 					switch (sprite.getImage().getFormat()) {
 						case 96:
-							var29 = 6406;
+							format = 6406;
 							break;
 						case 97:
-							var29 = 6409;
+							format = 6409;
 							break;
 						case 98:
-							var29 = 6410;
+							format = 6410;
 							break;
 						case 99:
-							var29 = 6407;
+							format = 6407;
 							break;
 						case 100:
-							var29 = 6408;
+							format = 6408;
 							break;
 						default:
 							break label84;
 					}
 
-					var28 = var29;
+					pixelFormat = format;
 				}
 
 				this.setupAppearance(sprite.getAppearance(), true);
 				GL11.glColor4ub((byte) 255, (byte) 255, (byte) 255, (byte) (255 * alphaFactor));
 				GL11.glDisableClientState(GL_COLOR_ARRAY);
 
-				GL11.glDrawPixels(var21[2], var21[3], var28, 5121, var27);
+				GL11.glDrawPixels(clippedCrop[2], clippedCrop[3], pixelFormat, 5121, pixels);
 				GL11.glPixelStorei(3314, 0);
 				GL11.glPixelStorei(3315, 0);
 				GL11.glPixelStorei(3316, 0);
@@ -1288,23 +1356,26 @@ public final class Emulator3D implements IGraphics3D {
 		}
 	}
 
-	public final void v3bind(Graphics var1) {
+	public final void v3bind(Graphics graphics) {
 	}
 
-	public final void v3release(Graphics var1) {
+	public final void v3release(Graphics graphics) {
 	}
 
 	public final void v3flush() {
 	}
 
 	public void finalizeTexture(Image2D image2D) {
-		if (usedGLTextures.contains(image2D.getId()))
-			usedGLTextures.removeElement(image2D.getId());
+		int id = image2D._getId();
+		if (id == 0) return;
 
-		if (!unusedGLTextures.contains(image2D.getId()))
-			unusedGLTextures.add(image2D.getId());
+		if (usedGLTextures.contains(id))
+			usedGLTextures.removeElement(id);
 
-		image2D.setId(0);
+		if (!unusedGLTextures.contains(id))
+			unusedGLTextures.add(id);
+
+		image2D._setId(0);
 	}
 
 	public void releaseTextures() {
@@ -1328,7 +1399,7 @@ public final class Emulator3D implements IGraphics3D {
 
 	private void dispose() {
 		exiting = true;
-		if (initialized && Settings.m3gThread) {
+		if (initialized && useM3gThread) {
 			sync(() -> {
 				releaseTextures();
 				releaseContext();
@@ -1341,7 +1412,7 @@ public final class Emulator3D implements IGraphics3D {
 	}
 
 	public void invalidateTexture(Image2D image2D) {
-		image2D.setLoaded(false);
+		image2D._setLoaded(false);
 	}
 
 	private void releaseTexture(int id) {
@@ -1351,7 +1422,7 @@ public final class Emulator3D implements IGraphics3D {
 		if (texturesTable.containsKey(id)) {
 			Image2D img = texturesTable.get(id);
 			if (img != null)
-				img.setId(0);
+				img._setId(0);
 		}
 		texturesTable.remove(id);
 	}
@@ -1370,6 +1441,9 @@ public final class Emulator3D implements IGraphics3D {
 				window = 0;
 			}
 			if (exiting) return;
+			// the drawable is (re)created below, so any cached size is stale
+			drawableWidth = 0;
+			drawableHeight = 0;
 			int mode = Settings.m3gContextMode == 0 && (Utils.win || Utils.termux) ? 2 : Settings.m3gContextMode;
 			if (!forceWindow && Settings.m3gContextMode != 3 && Emulator.getEmulator() instanceof SWTFrontend) {
 				try {
@@ -1400,8 +1474,9 @@ public final class Emulator3D implements IGraphics3D {
 						}
 
 						public void controlResized(ControlEvent controlEvent) {
-							if (targetWidth == 0 || targetHeight == 0 || glCanvas == null) return;
-							glCanvas.setSize(targetWidth, targetHeight);
+							if (drawableWidth == 0 || drawableHeight == 0) return;
+							if (glCanvas == null || glCanvas.isDisposed()) return;
+							glCanvas.setSize(drawableWidth, drawableHeight);
 							glCanvas.setVisible(false);
 						}
 					}));
@@ -1446,14 +1521,29 @@ public final class Emulator3D implements IGraphics3D {
 			} else {
 				GLCanvasUtil.makeCurrent(glCanvas);
 			}
-			getCapabilities();
+			try {
+				getCapabilities();
+			} catch (Exception e) {
+				Emulator.getEmulator().getLogStream().println("Failed to rebind OpenGL context, reinitializing it!");
+				e.printStackTrace();
+				initialized = false;
+
+				releaseContext();
+				unusedGLTextures.clear();
+				usedGLTextures.clear();
+				for (Image2D img : texturesTable.values()) {
+					img._setId(0);
+				}
+
+				bindM3GThread(w, h, true);
+			}
 		}
 	}
 
 	// m3g thread
 
 	public void sync(Runnable r) throws M3GException {
-		if (Thread.currentThread() == executorThread || !Settings.m3gThread) {
+		if (Thread.currentThread() == executorThread || !useM3gThread) {
 			try {
 				r.run();
 			} catch (RuntimeException e) {
@@ -1478,7 +1568,7 @@ public final class Emulator3D implements IGraphics3D {
 	}
 
 	public void async(Runnable r) {
-		if (Thread.currentThread() == executorThread || !Settings.m3gThread) {
+		if (Thread.currentThread() == executorThread || !useM3gThread) {
 			r.run();
 			return;
 		}

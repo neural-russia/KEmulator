@@ -1,5 +1,6 @@
 package javax.microedition.lcdui;
 
+import emulator.AppSettings;
 import emulator.Emulator;
 import emulator.EventQueue;
 import emulator.Settings;
@@ -52,14 +53,14 @@ public class Display {
 			return;
 		}
 		if (Display.current != null) {
-			Display.current.defocus();
-			Emulator.getEventQueue().notifyHidden(d);
+			Display.current._defocus();
+			Emulator.getEventQueue().notifyHidden(Display.current);
 		}
 		Emulator.getEmulator().getScreen().getCaret().displayableChanged();
 		if (d != null) {
 			Display.current = d;
 			if (d instanceof Canvas) {
-				if (Settings.blackberryApi) {
+				if (AppSettings.blackberryApi) {
 					((Canvas) d).setFullScreenMode(true);
 				}
 				Emulator.setCanvas((Canvas) d);
@@ -160,7 +161,7 @@ public class Display {
 			throw new IllegalArgumentException();
 		}
 		if (Display.current != null) {
-			Display.current.defocus();
+			Display.current._defocus();
 		}
 		Display.current = alert;
 		alert.lastDisplayed = ret;
