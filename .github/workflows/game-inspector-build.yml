@@ -1,0 +1,30 @@
+name: Game Inspector compile smoke test
+
+on:
+  push:
+    branches: [feature/game-data-inspector]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  compile-base:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Compile emulator sources and J2ME API
+        shell: bash
+        run: |
+          mkdir -p build/inspector-ci
+          find src/main src/media src/midp src/nnapi src/nokia src/oem src/3d \
+               m3g_stub/src micro3d_stub/src -name '*.java' \
+               ! -path 'micro3d_stub/src/javax/microedition/lcdui/Graphics.java' > build/inspector-sources.txt
+          javac -J-Xmx2g -encoding UTF-8 -source 8 -target 8 \
+            -cp "home/swt-win32-x86.jar:lib/*:home/*" \
+            -d build/inspector-ci @build/inspector-sources.txt
+      - name: Check Python utility syntax
+        run: python -m py_compile tools/inspector/replay_draws.py
