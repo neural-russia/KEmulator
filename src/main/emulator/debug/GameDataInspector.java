@@ -39,8 +39,8 @@ public final class GameDataInspector {
                     System.getenv("KEM_INSPECT_STATE_CLASSES");
 
     private static final Map<String, BufferedWriter> writers = new HashMap<String, BufferedWriter>();
-    private static final IdentityHashMap<Image, Integer> imageIds = new IdentityHashMap<Image, Integer>();
-    private static final IdentityHashMap<IImage, Integer> nativeImageIds = new IdentityHashMap<IImage, Integer>();
+    private static final Map<Image, Integer> imageIds = new WeakHashMap<Image, Integer>();
+    private static final Map<IImage, Integer> nativeImageIds = new WeakHashMap<IImage, Integer>();
     private static final Map<Integer, String> imageVersions = new HashMap<Integer, String>();
     private static final HashSet<Integer> savedImages = new HashSet<Integer>();
     private static final Map<String, String> stateValues = new HashMap<String, String>();
@@ -286,7 +286,7 @@ public final class GameDataInspector {
             imageVersions.put(id, filename);
             if (savedImages.add(id) || image.isMutable()) {
                 record("images.jsonl", "{\"event\":\"capture\",\"id\":" + id +
-                        ",\"file\":" + json(filename) + ",\"frame\":" + frame + "}");
+                        ",\"file\":" + json(filename) + ",\"mutableAtCapture\":" + image.isMutable() + ",\"frame\":" + frame + "}");
             }
         } catch (Throwable e) {
             record("images.jsonl", "{\"event\":\"capture_error\",\"id\":" + id +
