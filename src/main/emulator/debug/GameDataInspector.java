@@ -5,6 +5,8 @@ import emulator.graphics2D.IImage;
 
 import javax.microedition.lcdui.Image;
 import java.io.*;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 import java.lang.reflect.Array;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -45,6 +47,7 @@ public final class GameDataInspector {
     private static final HashSet<Integer> savedImages = new HashSet<Integer>();
     private static final Map<String, String> stateValues = new HashMap<String, String>();
     private static final HashSet<String> savedResources = new HashSet<String>();
+    private static final HashSet<String> savedRgb = new HashSet<String>();
     private static File root;
     private static long frame = 0L;
     private static long serial = 0L;
@@ -335,10 +338,53 @@ public final class GameDataInspector {
                 (DRAW_CALLSITES ? ",\"caller\":" + json(caller()) : "") + "}");
     }
 
-    public static synchronized void drawRGB(IImage dest, int x, int y, int w, int h) {
-        if (!enabled) return;
+    /**
+     * Preserve Java ME drawRGB pixels (some games never call drawRegion at all).
+     * Identical pixel buffers are deduplicated by CRC32 + dimensions.
+     */
+    public static synchronized void drawRGB(int[] pixels, int offset, int scanlength,
+                                            IImage dest, int x, int y, int w, int h,
+                                            boolean processAlpha,
+                                            int tx, int ty, int clipX, int clipY,
+                                            int clipW, int clipH) {
+        if (!enabled || pixels == null) return;
+        String file = "";
+        if (w > 0 && h > 0 && (long) w * h <= intEnv("KEM_INSPECT_MAX_RGB_PIXELS", 500000)) {
+            try {
+                int[] colors = new int[w * h];
+                CRC32 crc = new CRC32();
+                for (int row = 0; row < h; row++) {
+                    for (int col = 0; col < w; col++) {
+                        long idx = (long) offset + (long) row * scanlength + col;
+                        if (idx < 0 || idx >= pixels.length) throw new IndexOutOfBoundsException();
+                        int color = pixels[(int) idx];
+                        if (!processAlpha) color |= 0xff000000;
+                        colors[row * w + col] = color;
+                        crc.update(color >>> 24);
+                        crc.update(color >>> 16);
+                        crc.update(color >>> 8);
+                        crc.update(color);
+                    }
+                }
+                file = "rgb_" + w + "x" + h + "_" + Long.toHexString(crc.getValue()) + ".png";
+                if (savedRgb.add(file) && start()) {
+                    BufferedImage bitmap = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+                    bitmap.setRGB(0, 0, w, h, colors, 0, w);
+                    ImageIO.write(bitmap, "png", new File(root, "images/" + file));
+                    record("images.jsonl", "{\"event\":\"captureRGB\",\"file\":" + json(file) +
+                            ",\"width\":" + w + ",\"height\":" + h + ",\"frame\":" + frame + "}");
+                }
+            } catch (Throwable e) {
+                file = "";
+            }
+        }
         record("draws.jsonl", "{\"frame\":" + frame + ",\"op\":\"drawRGB\",\"target\":" + target(dest) +
-                ",\"dst\":[" + x + "," + y + "," + w + "," + h + "],\"pixelsNotCaptured\":true}");
+                ",\"file\":" + json(file) +
+                ",\"dst\":[" + x + "," + y + "," + w + "," + h + "]" +
+                ",\"tx\":" + tx + ",\"ty\":" + ty +
+                ",\"clip\":[" + clipX + "," + clipY + "," + clipW + "," + clipH + "]" +
+                ",\"pixelsNotCaptured\":" + (file.length() == 0) +
+                (DRAW_CALLSITES ? ",\"caller\":" + json(caller()) : "") + "}");
     }
 
     public static synchronized void framePresented(String source) {
