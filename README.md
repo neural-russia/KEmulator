@@ -1,3 +1,5 @@
+> **Experimental Game Data Inspector fork branch.** See [capture setup, Windows build, and limitations](docs/GAME_DATA_INSPECTOR.md). The main nnmod README continues below.
+
 # KEmulator nnmod
 Cross-platform J2ME emulator, based on decompiled KEmulator 1.0.3
 
